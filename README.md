@@ -48,12 +48,12 @@ the list grew.
 
 Before writing it, these were the closest existing actions (checked in November 2026):
 
-| Action | What it does | Difference |
-| --- | --- | --- |
-| [gaelgirodon/ci-badges-action](https://github.com/gaelgirodon/ci-badges-action) | Badges for test counts and coverage from JUnit, Cobertura, JaCoCo and LCOV reports | Counts tests; no catalog of features, no progress percentage or history |
-| [markpatterson27/points-bar](https://github.com/markpatterson27/points-bar) | Draws an SVG points bar from a value like `25/50` | Draws a number you give it; does not compute it |
-| [mikepenz/action-junit-report](https://github.com/mikepenz/action-junit-report), [dorny/test-reporter](https://github.com/dorny/test-reporter), [EnricoMi/publish-unit-test-result-action](https://github.com/EnricoMi/publish-unit-test-result-action) | Turn test reports into check runs, annotations and summaries | Report test results; they do not map tests to features |
-| [shields.io](https://shields.io/) dynamic badges | Draw a badge from a value in a JSON file or endpoint | Draw any number; something else has to compute it |
+| Action                                                                                                                                                                                                                                                  | What it does                                                                       | Difference                                                              |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [gaelgirodon/ci-badges-action](https://github.com/gaelgirodon/ci-badges-action)                                                                                                                                                                         | Badges for test counts and coverage from JUnit, Cobertura, JaCoCo and LCOV reports | Counts tests; no catalog of features, no progress percentage or history |
+| [markpatterson27/points-bar](https://github.com/markpatterson27/points-bar)                                                                                                                                                                             | Draws an SVG points bar from a value like `25/50`                                  | Draws a number you give it; does not compute it                         |
+| [mikepenz/action-junit-report](https://github.com/mikepenz/action-junit-report), [dorny/test-reporter](https://github.com/dorny/test-reporter), [EnricoMi/publish-unit-test-result-action](https://github.com/EnricoMi/publish-unit-test-result-action) | Turn test reports into check runs, annotations and summaries                       | Report test results; they do not map tests to features                  |
+| [shields.io](https://shields.io/) dynamic badges                                                                                                                                                                                                        | Draw a badge from a value in a JSON file or endpoint                               | Draw any number; something else has to compute it                       |
 
 None of them turns a declared list of features plus test evidence into a progress figure. That
 calculation, and keeping it honest, is what this action adds.
@@ -71,12 +71,12 @@ The action is not released yet. To try the current version from a workflow:
 - run: echo "Catalog found: ${{ steps.progress.outputs.catalog-found }}"
 ```
 
-| Input | Default | Description |
-| --- | --- | --- |
+| Input     | Default        | Description                                           |
+| --------- | -------------- | ----------------------------------------------------- |
 | `catalog` | `progress.yml` | Path to the catalog, relative to the repository root. |
 
-| Output | Description |
-| --- | --- |
+| Output          | Description                                        |
+| --------------- | -------------------------------------------------- |
 | `catalog-found` | `true` if the catalog file exists, `false` if not. |
 
 The action writes a line to the log and to the job summary.
