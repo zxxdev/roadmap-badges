@@ -1,0 +1,21 @@
+name: Roadmap Badges
+description: Compute a project's progress from a feature catalog and its test results, and publish badges.
+author: zxxdev
+
+branding:
+  icon: bar-chart-2
+  color: purple
+
+inputs:
+  catalog:
+    description: Path to the feature catalog, relative to the repository root.
+    required: false
+    default: progress.yml
+
+outputs:
+  catalog-found:
+    description: "`true` if the catalog file exists, `false` if not."
+
+runs:
+  using: node24
+  main: dist/index.js
