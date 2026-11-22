@@ -1,0 +1,10 @@
+{
+  // What Rollup compiles into dist/index.js: the source only, no tests.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "declaration": false
+  },
+  "include": ["src"]
+}

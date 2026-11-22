@@ -1,0 +1,21 @@
+{
+  "name": "roadmap-badges",
+  "version": "0.0.0",
+  "private": true,
+  "description": "GitHub Action that computes a project's progress from a feature catalog and its test results.",
+  "license": "MIT",
+  "type": "module",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "bundle": "rollup --config rollup.config.js",
+    "typecheck": "tsc --project tsconfig.json",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "all": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test && pnpm bundle"
+  }
+}
