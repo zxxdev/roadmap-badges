@@ -44,6 +44,7 @@ describe("run", () => {
     await run(runner);
     expect(done.logs).toEqual(["roadmap-badges: No catalog at progress.yml yet."]);
     expect(done.outputs).toEqual({ "catalog-found": "false" });
+    expect(done.summary).toContain("No catalog at `progress.yml`.");
     expect(done.failed).toBeUndefined();
   });
 
@@ -67,5 +68,7 @@ describe("run", () => {
     };
     await expect(run(runner)).resolves.toBeUndefined();
     expect(done.failed).toBe("disk unavailable");
+    expect(done.outputs).toEqual({});
+    expect(done.summary).toBe("");
   });
 });
