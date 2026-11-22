@@ -1,8 +1,12 @@
 {
   // What Rollup compiles into dist/index.js: the source only, no tests.
+  // Rollup resolves the imports itself, hence the "Bundler" resolution.
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "noEmit": false,
+    "rootDir": "src",
     "outDir": "dist",
     "declaration": false
   },

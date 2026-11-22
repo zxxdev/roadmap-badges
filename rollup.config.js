@@ -12,6 +12,19 @@ export default {
     format: "es",
     sourcemap: false,
   },
+  // Two warnings about code inside dependencies (@actions/core and its helpers)
+  // are expected and harmless: compiled `this` at module level, and a circular
+  // import between two of its files. Anything else is still shown.
+  onwarn(warning, warn) {
+    const inDependency = (warning.id ?? warning.ids?.[0] ?? "").includes("node_modules");
+    if (
+      inDependency &&
+      (warning.code === "THIS_IS_UNDEFINED" || warning.code === "CIRCULAR_DEPENDENCY")
+    ) {
+      return;
+    }
+    warn(warning);
+  },
   plugins: [
     typescript({ tsconfig: "./tsconfig.build.json" }),
     nodeResolve({ preferBuiltins: true }),
