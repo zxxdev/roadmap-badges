@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  # Weekly run: new vulnerabilities are disclosed after dependencies are installed.
+  schedule:
+    - cron: "23 6 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Lint, test and bundle
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .node-version
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level high
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      # GitHub runs dist/index.js as it is in the repository. If someone changes
+      # src/ and forgets `pnpm bundle`, the published action would not do what
+      # the source says: rebuild it here and fail if it differs.
+      - name: Check that dist/ matches the source
+        run: |
+          pnpm bundle
+          if [ -n "$(git status --porcelain -- dist)" ]; then
+            echo "::error::dist/ is out of date. Run 'pnpm bundle' and commit the result."
+            git status --short -- dist
+            git diff --stat -- dist
+            exit 1
+          fi
+
+  action:
+    name: Run the action
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Runs the action from this checkout, exactly as another repository would.
+      - name: Run with a catalog that exists
+        id: found
+        uses: ./
+        with:
+          catalog: package.json
+
+      - name: Run with a catalog that does not exist
+        id: missing
+        uses: ./
+        with:
+          catalog: no-such-file.yml
+
+      - name: Check the outputs
+        env:
+          FOUND: ${{ steps.found.outputs.catalog-found }}
+          MISSING: ${{ steps.missing.outputs.catalog-found }}
+        run: |
+          test "$FOUND" = "true" || { echo "::error::expected catalog-found=true, got '$FOUND'"; exit 1; }
+          test "$MISSING" = "false" || { echo "::error::expected catalog-found=false, got '$MISSING'"; exit 1; }
+          echo "Both outputs are right."
