@@ -103,8 +103,9 @@ function describeIssue(issue: z.core.$ZodIssue, data: unknown, doc: Document, at
   }
 
   if (issue.code === "invalid_union" && issue.errors.length === 0) {
-    // The only union is the item, chosen by its "evidence" field.
-    const evidencePath = [...path, "evidence"];
+    // The only union is the item, chosen by its "evidence" field. zod puts that
+    // field at the end of the path; older versions pointed at the item itself.
+    const evidencePath = path.at(-1) === "evidence" ? path : [...path, "evidence"];
     const value = valueAt(data, evidencePath);
     const options = EVIDENCE_TYPES.map((type) => `"${type}"`).join(" or ");
     return [
