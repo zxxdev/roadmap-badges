@@ -233,11 +233,11 @@ function typeName(expected: string): string {
 }
 
 function describeValue(value: unknown): string {
-  if (value === null) return "empty";
-  if (Array.isArray(value)) return "a list";
-  if (typeof value === "object") return "a mapping";
   if (typeof value === "string") return `"${value.length > 40 ? value.slice(0, 40) + "…" : value}"`;
-  return String(value);
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return "a list";
+  if (value === null || value === undefined) return "empty";
+  return "a mapping";
 }
 
 function firstLine(message: string): string {
