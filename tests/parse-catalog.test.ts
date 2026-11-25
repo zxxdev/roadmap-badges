@@ -70,12 +70,35 @@ describe("parseCatalog @catalog.read", () => {
     expect(result.ok).toBe(true);
   });
 
-  it("reports a YAML syntax error with its line and nothing else", () => {
+  it("does not count a byte order mark as a column", () => {
+    const errors = errorsOf("﻿" + VALID.replace("project: demo", "project: 7"));
+    expect(errors).toEqual([
+      { line: 1, column: 10, field: "project", message: "must be text, not 7" },
+    ]);
+  });
+
+  it("reports YAML syntax errors with their position and nothing else", () => {
     const errors = errorsOf(yaml("project: demo", "areas:", "  - id: api", "   title: [unclosed"));
-    expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]?.message).toMatch(/^invalid YAML: /);
-    expect(errors[0]?.field).toBe("");
-    expect(errors.every((error) => error.line >= 3)).toBe(true);
+    expect(errors.map((error) => [error.line, error.column, error.field])).toEqual([
+      [4, 1, ""],
+      [5, 1, ""],
+    ]);
+    expect(errors.every((error) => error.message.startsWith("invalid YAML: "))).toBe(true);
+  });
+
+  it("says an item or an area must be a mapping when it is not", () => {
+    const errors = errorsOf(
+      VALID.replace(
+        "      - id: docs.guide\n        title: User guide written\n        evidence: manual\n        done: false\n",
+        "      - just text\n      -\n",
+      ).replace("    items:\n      - id: api.get-user", "    items: none\n    extra:\n      - id: api.get-user"),
+    );
+    expect(errors.map((error) => [error.field, error.message])).toEqual([
+      ["areas[0].items", 'must be a list, not "none"'],
+      ["areas[0].extra", "unknown field"],
+      ["areas[1].items[0]", 'must be a mapping, not "just text"'],
+      ["areas[1].items[1]", "must be a mapping, not empty"],
+    ]);
   });
 
   it("reports a key written twice", () => {

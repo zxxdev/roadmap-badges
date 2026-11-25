@@ -37,7 +37,9 @@ const FIELD_HINTS: Record<string, string> = {
 
 export function parseCatalog(text: string): ParseResult {
   const lines = new LineCounter();
-  const doc = parseDocument(text, { lineCounter: lines, prettyErrors: false, uniqueKeys: true });
+  // A byte order mark would count as a character and shift columns on line 1.
+  const source = text.startsWith("﻿") ? text.slice(1) : text;
+  const doc = parseDocument(source, { lineCounter: lines, prettyErrors: false, uniqueKeys: true });
   const at = (offset: number) => {
     const { line, col } = lines.linePos(offset);
     return { line, column: col };

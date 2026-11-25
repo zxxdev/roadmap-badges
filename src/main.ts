@@ -119,5 +119,5 @@ export function tableCell(text: string): string {
     .replaceAll("&", "&amp;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
-    .replace(/[\\|*_`[\]]/g, (char) => `\\${char}`);
+    .replace(/[\\|*_`[\]$~]/g, (char) => `\\${char}`);
 }

@@ -125,8 +125,9 @@ areas:
 | `dropped`                  | Optional: why the item was dropped. It leaves the total but stays in the file and the report.                      |
 
 Unknown fields are errors, so a misspelt field cannot be ignored silently. When the catalog is
-not valid, the step fails and lists every problem at once, with its line, column and field. In a
-pull request each one shows as an annotation on that line:
+not valid, the step fails and lists every problem at once, with its line, column and field, in
+the log and in the job summary. In a pull request they also show as annotations on their lines
+(GitHub shows up to 10 per step):
 
 ```text
 Error: tests/fixtures/catalogs/invalid.yml:10:19 areas[0].items[0].evidence: must be "junit" or "manual", not "junti"

@@ -126,8 +126,8 @@ describe("run @catalog.read", () => {
 
 describe("tableCell", () => {
   it("keeps catalog text from ending the cell, adding HTML or formatting", () => {
-    expect(tableCell("a | <b>\n*c* & [d](e) `f` _g_ \\")).toBe(
-      "a \\| &lt;b&gt; \\*c\\* &amp; \\[d\\](e) \\`f\\` \\_g\\_ \\\\",
+    expect(tableCell("a | <b>\n*c* & [d](e) `f` _g_ \\ $x$ ~~h~~")).toBe(
+      "a \\| &lt;b&gt; \\*c\\* &amp; \\[d\\](e) \\`f\\` \\_g\\_ \\\\ \\$x\\$ \\~\\~h\\~\\~",
     );
   });
 });
