@@ -41923,7 +41923,9 @@ const FIELD_HINTS = {
 };
 function parseCatalog(text) {
     const lines = new LineCounter();
-    const doc = parseDocument(text, { lineCounter: lines, prettyErrors: false, uniqueKeys: true });
+    // A byte order mark would count as a character and shift columns on line 1.
+    const source = text.startsWith("﻿") ? text.slice(1) : text;
+    const doc = parseDocument(source, { lineCounter: lines, prettyErrors: false, uniqueKeys: true });
     const at = (offset) => {
         const { line, col } = lines.linePos(offset);
         return { line, column: col };
@@ -42202,7 +42204,7 @@ function tableCell(text) {
         .replaceAll("&", "&amp;")
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
-        .replace(/[\\|*_`[\]]/g, (char) => `\\${char}`);
+        .replace(/[\\|*_`[\]$~]/g, (char) => `\\${char}`);
 }
 
 /**

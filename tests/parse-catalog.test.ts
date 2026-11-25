@@ -91,7 +91,10 @@ describe("parseCatalog @catalog.read", () => {
       VALID.replace(
         "      - id: docs.guide\n        title: User guide written\n        evidence: manual\n        done: false\n",
         "      - just text\n      -\n",
-      ).replace("    items:\n      - id: api.get-user", "    items: none\n    extra:\n      - id: api.get-user"),
+      ).replace(
+        "    items:\n      - id: api.get-user",
+        "    items: none\n    extra:\n      - id: api.get-user",
+      ),
     );
     expect(errors.map((error) => [error.field, error.message])).toEqual([
       ["areas[0].items", 'must be a list, not "none"'],
