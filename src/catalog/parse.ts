@@ -87,7 +87,12 @@ export function formatError(file: string, error: CatalogError): string {
 type At = (offset: number) => { line: number; column: number };
 
 /** Turns one zod issue into errors at the right place, with a plain message. */
-function describeIssue(issue: z.core.$ZodIssue, data: unknown, doc: Document, at: At): CatalogError[] {
+function describeIssue(
+  issue: z.core.$ZodIssue,
+  data: unknown,
+  doc: Document,
+  at: At,
+): CatalogError[] {
   const path = issue.path.filter((key) => typeof key !== "symbol");
 
   if (issue.code === "unrecognized_keys") {
@@ -232,7 +237,7 @@ function describeValue(value: unknown): string {
   if (Array.isArray(value)) return "a list";
   if (typeof value === "object") return "a mapping";
   if (typeof value === "string") return `"${value.length > 40 ? value.slice(0, 40) + "…" : value}"`;
-  return String(value as number | boolean | bigint);
+  return String(value);
 }
 
 function firstLine(message: string): string {

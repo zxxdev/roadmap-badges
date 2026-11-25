@@ -52,7 +52,10 @@ areas:
 
 describe("run @catalog.read", () => {
   it("reads the catalog and reports areas, items and dropped items", async () => {
-    const { runner, done } = fakeRunner({ catalog: "docs/progress.yml" }, { "docs/progress.yml": CATALOG });
+    const { runner, done } = fakeRunner(
+      { catalog: "docs/progress.yml" },
+      { "docs/progress.yml": CATALOG },
+    );
     await run(runner);
     expect(done.failed).toBeUndefined();
     expect(done.errors).toEqual([]);

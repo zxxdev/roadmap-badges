@@ -54,7 +54,9 @@ describe("parseCatalog @catalog.read", () => {
   });
 
   it("accepts an area with no items yet", () => {
-    const result = parseCatalog(yaml("project: demo", "areas:", "  - id: api", "    title: API", "    items: []"));
+    const result = parseCatalog(
+      yaml("project: demo", "areas:", "  - id: api", "    title: API", "    items: []"),
+    );
     expect(result.ok).toBe(true);
   });
 
@@ -102,10 +104,10 @@ describe("parseCatalog @catalog.read", () => {
 
   it("points an unknown field at the key itself, with a hint for fields of the other kind", () => {
     const errors = errorsOf(
-      VALID.replace("        evidence: junit\n      - id: api.export", "        evidence: junit\n        done: true\n      - id: api.export").replace(
-        "    title: Docs",
-        "    title: Docs\n    colour: blue",
-      ),
+      VALID.replace(
+        "        evidence: junit\n      - id: api.export",
+        "        evidence: junit\n        done: true\n      - id: api.export",
+      ).replace("    title: Docs", "    title: Docs\n    colour: blue"),
     );
     expect(errors).toEqual([
       {
@@ -166,10 +168,7 @@ describe("parseCatalog @catalog.read", () => {
     );
     expect(errors.map((error) => [error.field, error.message])).toEqual([
       ["areas[0].items[0].title", "must not be empty"],
-      [
-        "areas[0].items[1].tests",
-        "needs at least one test, or leave it out to link by @<id> tag",
-      ],
+      ["areas[0].items[1].tests", "needs at least one test, or leave it out to link by @<id> tag"],
     ]);
   });
 
@@ -181,10 +180,9 @@ describe("parseCatalog @catalog.read", () => {
 
   it("reports duplicate ids, item ids across areas too, with the first line", () => {
     const errors = errorsOf(
-      VALID.replace("id: api.export", "id: api.get-user").replace(
-        "  - id: docs",
-        "  - id: api",
-      ).replace("id: docs.guide", "id: api.get-user"),
+      VALID.replace("id: api.export", "id: api.get-user")
+        .replace("  - id: docs", "  - id: api")
+        .replace("id: docs.guide", "id: api.get-user"),
     );
     expect(errors).toEqual([
       {
@@ -210,10 +208,9 @@ describe("parseCatalog @catalog.read", () => {
 
   it("reports every problem at once, in the order they appear in the file", () => {
     const errors = errorsOf(
-      VALID.replace("project: demo", "project: 7").replace("title: Docs", "title: [Docs]").replace(
-        "id: docs.guide",
-        "id: api.get-user",
-      ),
+      VALID.replace("project: demo", "project: 7")
+        .replace("title: Docs", "title: [Docs]")
+        .replace("id: docs.guide", "id: api.get-user"),
     );
     expect(errors.map((error) => error.line)).toEqual([1, 17, 19]);
   });

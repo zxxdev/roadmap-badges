@@ -35,8 +35,9 @@ const dropped = text(
 const testSelector = z
   .strictObject({
     name: text("The test's name, exactly as it appears in the JUnit report."),
-    classname: text("The test's classname in the JUnit report, when the name alone is ambiguous.")
-      .optional(),
+    classname: text(
+      "The test's classname in the JUnit report, when the name alone is ambiguous.",
+    ).optional(),
   })
   .meta({ description: "One test that proves the item." });
 
