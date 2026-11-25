@@ -1,0 +1,72 @@
+# yaml-language-server: $schema=./schema/progress.schema.json
+#
+# What roadmap-badges sets out to do. The action reads this file to compute its
+# own progress: an item is done when the tests tagged "@<item id>" in their name
+# pass. The list grows as the project does, which lowers the percentage; that is
+# expected, and the history will show when it happened.
+project: roadmap-badges
+areas:
+  - id: catalog
+    title: Catalog
+    items:
+      - id: catalog.read
+        title: Read progress.yml and report each problem with its line and field
+        evidence: junit
+      - id: catalog.json-schema
+        title: JSON Schema for editors, generated from the same rules
+        evidence: junit
+      - id: catalog.openapi
+        title: Build an area's items from an OpenAPI specification
+        evidence: junit
+
+  - id: evidence
+    title: Evidence
+    items:
+      - id: evidence.junit
+        title: Read JUnit XML reports from the common test tools
+        evidence: junit
+      - id: evidence.link
+        title: Link items to tests by tag or by selector
+        evidence: junit
+      - id: evidence.manual
+        title: Decide manual items by their done flag
+        evidence: junit
+      - id: evidence.metric
+        title: Read a number from a JSON file and compare it with a target
+        evidence: junit
+
+  - id: outputs
+    title: Outputs
+    items:
+      - id: outputs.badges
+        title: SVG badge per area, with accessible text
+        evidence: junit
+      - id: outputs.map
+        title: Progress map with one cell per item
+        evidence: junit
+      - id: outputs.report
+        title: HTML report that links each item to its tests
+        evidence: junit
+
+  - id: history
+    title: History
+    items:
+      - id: history.record
+        title: Keep one snapshot per run in the Pages branch
+        evidence: junit
+      - id: history.page
+        title: History page with a chart
+        evidence: junit
+      - id: history.recent
+        title: Badge for items done in the last 7 days
+        evidence: junit
+
+  - id: pull-requests
+    title: Pull requests
+    items:
+      - id: pr.comment
+        title: Comment on each pull request how every percentage changes
+        evidence: junit
+      - id: pr.gate
+        title: Fail CI when a percentage drops without the catalog growing
+        evidence: junit

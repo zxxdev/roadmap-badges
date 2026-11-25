@@ -77,23 +77,38 @@ jobs:
           persist-credentials: false
 
       # Runs the action from this checkout, exactly as another repository would.
-      - name: Run with a catalog that exists
-        id: found
+      - name: Run on this repository's own catalog
+        uses: ./
+
+      - name: Run on a valid example catalog
+        id: valid
         uses: ./
         with:
-          catalog: package.json
+          catalog: tests/fixtures/catalogs/valid.yml
 
-      - name: Run with a catalog that does not exist
+      # These two must fail. continue-on-error keeps the job going so the last
+      # step can check that they did; their error annotations are expected.
+      - name: Run on an invalid example catalog (expected to fail)
+        id: invalid
+        continue-on-error: true
+        uses: ./
+        with:
+          catalog: tests/fixtures/catalogs/invalid.yml
+
+      - name: Run with a catalog that does not exist (expected to fail)
         id: missing
+        continue-on-error: true
         uses: ./
         with:
           catalog: no-such-file.yml
 
-      - name: Check the outputs
+      - name: Check the results
         env:
-          FOUND: ${{ steps.found.outputs.catalog-found }}
-          MISSING: ${{ steps.missing.outputs.catalog-found }}
+          COUNTS: ${{ steps.valid.outputs.areas }}/${{ steps.valid.outputs.items }}/${{ steps.valid.outputs.dropped }}
+          INVALID: ${{ steps.invalid.outcome }}
+          MISSING: ${{ steps.missing.outcome }}
         run: |
-          test "$FOUND" = "true" || { echo "::error::expected catalog-found=true, got '$FOUND'"; exit 1; }
-          test "$MISSING" = "false" || { echo "::error::expected catalog-found=false, got '$MISSING'"; exit 1; }
-          echo "Both outputs are right."
+          test "$COUNTS" = "2/2/1" || { echo "::error::expected areas/items/dropped 2/2/1, got '$COUNTS'"; exit 1; }
+          test "$INVALID" = "failure" || { echo "::error::the invalid catalog should fail, got '$INVALID'"; exit 1; }
+          test "$MISSING" = "failure" || { echo "::error::a missing catalog should fail, got '$MISSING'"; exit 1; }
+          echo "All results are right."

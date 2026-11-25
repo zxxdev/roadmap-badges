@@ -8,13 +8,19 @@ branding:
 
 inputs:
   catalog:
-    description: Path to the feature catalog, relative to the repository root.
+    description: >-
+      Path to the feature catalog, relative to the repository root. The step fails if the
+      file is missing or not valid.
     required: false
     default: progress.yml
 
 outputs:
-  catalog-found:
-    description: "`true` if the catalog file exists, `false` if not."
+  areas:
+    description: Number of areas in the catalog.
+  items:
+    description: Number of items that count towards the total (dropped items do not).
+  dropped:
+    description: Number of dropped items.
 
 runs:
   using: node24
