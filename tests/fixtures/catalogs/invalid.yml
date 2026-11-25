@@ -1,0 +1,16 @@
+# An invalid example catalog. CI runs the action on it and expects the step to
+# fail, with one error annotation per problem on the lines below.
+project: example
+areas:
+  - id: api
+    title: API
+    items:
+      - id: api.get-user
+        title: Get a user
+        evidence: junti
+      - id: API Export
+        title: Export users to CSV
+        evidence: junit
+      - id: docs.guide
+        evidence: manual
+        done: yes

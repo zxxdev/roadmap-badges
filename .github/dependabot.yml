@@ -16,6 +16,10 @@ updates:
       # typescript-eslint supports TypeScript below 6.1 (see docs/adr/0001).
       - dependency-name: typescript
         versions: [">=6.1.0"]
+      # The action runs on Node 24 (action.yml), so its types stay on Node 24:
+      # newer types would allow APIs that Node 24 does not have.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
     groups:
       build:
         patterns:

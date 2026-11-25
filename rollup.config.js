@@ -12,15 +12,14 @@ export default {
     format: "es",
     sourcemap: false,
   },
-  // Two warnings about code inside dependencies (@actions/core and its helpers)
-  // are expected and harmless: compiled `this` at module level, and a circular
-  // import between two of its files. Anything else is still shown.
+  // Three warnings about code inside dependencies are expected and harmless:
+  // compiled `this` at module level and a circular import between two files
+  // (@actions/core and its helpers), and comments that mention `@__PURE__` in
+  // their prose, which Rollup drops (zod). Anything else is still shown.
   onwarn(warning, warn) {
     const inDependency = (warning.id ?? warning.ids?.[0] ?? "").includes("node_modules");
-    if (
-      inDependency &&
-      (warning.code === "THIS_IS_UNDEFINED" || warning.code === "CIRCULAR_DEPENDENCY")
-    ) {
+    const expected = ["THIS_IS_UNDEFINED", "CIRCULAR_DEPENDENCY", "INVALID_ANNOTATION"];
+    if (inDependency && expected.includes(warning.code ?? "")) {
       return;
     }
     warn(warning);

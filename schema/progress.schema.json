@@ -1,0 +1,151 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://raw.githubusercontent.com/zxxdev/roadmap-badges/main/schema/progress.schema.json",
+  "type": "object",
+  "properties": {
+    "project": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The project's name, shown in the report."
+    },
+    "areas": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "maxLength": 64,
+            "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+            "description": "Unique id of the area; it names the area's badge file. Lowercase letters and digits joined by \".\" or \"-\"."
+          },
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The area's name, shown on its badge and in the report."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+                      "description": "Unique id of the item; tests link to it with @<id> in their name. Lowercase letters and digits joined by \".\" or \"-\"."
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "What the item is, in a few words."
+                    },
+                    "evidence": {
+                      "type": "string",
+                      "const": "junit",
+                      "description": "Done when all its tests are in the JUnit reports and pass."
+                    },
+                    "tests": {
+                      "description": "Tests that prove the item, for tests that cannot carry the @<id> tag in their name.",
+                      "minItems": 1,
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The test's name, exactly as it appears in the JUnit report."
+                          },
+                          "classname": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "The test's classname in the JUnit report, when the name alone is ambiguous."
+                          }
+                        },
+                        "required": [
+                          "name"
+                        ],
+                        "additionalProperties": false,
+                        "description": "One test that proves the item."
+                      }
+                    },
+                    "dropped": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Why the item was dropped. A dropped item leaves the total but stays in the report with this reason."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "evidence"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Item proved by tests"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "maxLength": 64,
+                      "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$",
+                      "description": "Unique id of the item. Lowercase letters and digits joined by \".\" or \"-\"."
+                    },
+                    "title": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "What the item is, in a few words."
+                    },
+                    "evidence": {
+                      "type": "string",
+                      "const": "manual",
+                      "description": "Decided by the done flag. Use it only for what no test can check."
+                    },
+                    "done": {
+                      "type": "boolean",
+                      "description": "Whether the item is done."
+                    },
+                    "dropped": {
+                      "type": "string",
+                      "minLength": 1,
+                      "description": "Why the item was dropped. A dropped item leaves the total but stays in the report with this reason."
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "title",
+                    "evidence",
+                    "done"
+                  ],
+                  "additionalProperties": false,
+                  "title": "Item decided by hand"
+                }
+              ]
+            },
+            "description": "What the area sets out to do."
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "items"
+        ],
+        "additionalProperties": false,
+        "description": "A group of items with its own badge."
+      },
+      "description": "The areas of the project, each with its own badge."
+    }
+  },
+  "required": [
+    "project",
+    "areas"
+  ],
+  "additionalProperties": false,
+  "title": "roadmap-badges catalog",
+  "description": "What a project sets out to do (progress.yml). roadmap-badges computes the progress from it and from the test results."
+}
