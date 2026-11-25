@@ -1,2 +1,4 @@
 dist/
 pnpm-lock.yaml
+# Generated from src/catalog/schema.ts; tests/json-schema.test.ts checks it.
+schema/progress.schema.json
