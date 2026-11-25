@@ -76,11 +76,11 @@ The action is not released yet. To try the current version from a workflow:
 | --------- | -------------- | ----------------------------------------------------------------------------------------------- |
 | `catalog` | `progress.yml` | Path to the catalog, relative to the repository root. The step fails if it is missing or wrong. |
 
-| Output    | Description                                                         |
-| --------- | ------------------------------------------------------------------- |
-| `areas`   | Number of areas in the catalog.                                     |
+| Output    | Description                                                          |
+| --------- | -------------------------------------------------------------------- |
+| `areas`   | Number of areas in the catalog.                                      |
 | `items`   | Number of items that count towards the total (dropped items do not). |
-| `dropped` | Number of dropped items.                                            |
+| `dropped` | Number of dropped items.                                             |
 
 The action writes a line to the log and a table of areas to the job summary.
 
@@ -114,15 +114,15 @@ areas:
         done: false
 ```
 
-| Field                     | Rule                                                                                                 |
-| ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `project`                 | The project's name. Required.                                                                        |
+| Field                      | Rule                                                                                                               |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `project`                  | The project's name. Required.                                                                                      |
 | `areas[].id`, `items[].id` | Lowercase letters and digits joined by `.` or `-`. Area ids are unique; item ids are unique across the whole file. |
-| `title`                   | Required, not empty.                                                                                 |
-| `evidence`                | `junit` (proved by tests) or `manual` (decided by `done`). Required: there is no default.            |
-| `tests`                   | Optional, `junit` items only: tests chosen by `name` and, if needed, `classname`.                     |
-| `done`                    | Required for `manual` items, and only for them: `true` or `false`.                                   |
-| `dropped`                 | Optional: why the item was dropped. It leaves the total but stays in the file and the report.        |
+| `title`                    | Required, not empty.                                                                                               |
+| `evidence`                 | `junit` (proved by tests) or `manual` (decided by `done`). Required: there is no default.                          |
+| `tests`                    | Optional, `junit` items only: tests chosen by `name` and, if needed, `classname`.                                  |
+| `done`                     | Required for `manual` items, and only for them: `true` or `false`.                                                 |
+| `dropped`                  | Optional: why the item was dropped. It leaves the total but stays in the file and the report.                      |
 
 Unknown fields are errors, so a misspelt field cannot be ignored silently. When the catalog is
 not valid, the step fails and lists every problem at once, with its line, column and field. In a
