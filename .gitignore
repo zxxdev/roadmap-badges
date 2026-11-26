@@ -3,3 +3,5 @@ coverage/
 *.log
 .DS_Store
 # dist/ is NOT ignored: it is the bundled action that GitHub runs.
+# JUnit report that CI writes for the action to read.
+reports/

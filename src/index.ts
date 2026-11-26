@@ -2,24 +2,35 @@
  * Entry point that GitHub runs (bundled into dist/index.js): connects run() to
  * the real runner through the GitHub Actions toolkit.
  */
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import * as core from "@actions/core";
-import { run } from "./main.js";
+import { run, type FileLocation } from "./main.js";
+
+/** Folders that a pattern such as "reports/**" never searches. */
+const SKIPPED_FOLDERS = new Set(["node_modules", ".git"]);
+
+/** A location as the toolkit's annotation properties. */
+function annotation(location: FileLocation | undefined) {
+  return (
+    location && {
+      file: location.file,
+      startLine: location.line,
+      startColumn: location.column,
+    }
+  );
+}
 
 await run({
   getInput: (name) => core.getInput(name),
   info: (message) => {
     core.info(message);
   },
+  warning: (message, location) => {
+    core.warning(message, annotation(location));
+  },
   error: (message, location) => {
-    core.error(
-      message,
-      location && {
-        file: location.file,
-        startLine: location.line,
-        startColumn: location.column,
-      },
-    );
+    core.error(message, annotation(location));
   },
   setOutput: (name, value) => {
     core.setOutput(name, value);
@@ -35,6 +46,13 @@ await run({
       throw error;
     }
   },
+  // Relative to the working directory, which is the repository's root in a
+  // workflow. Only files: "reports/**" also matches the folder itself. Sorted,
+  // so the reports are always read in the same order.
+  findFiles: (pattern) =>
+    globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) })
+      .filter((path) => statSync(path).isFile())
+      .sort(),
   setFailed: (message) => {
     core.setFailed(message);
   },

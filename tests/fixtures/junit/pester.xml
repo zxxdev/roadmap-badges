@@ -1,0 +1,24 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<testsuites xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="junit_schema_4.xsd" name="Pester" tests="4" errors="0" failures="1" disabled="1" time="0.428">
+  <testsuite name="pester/Demo.Tests.ps1" tests="4" errors="0" failures="1" hostname="devbox" id="0" skipped="1" disabled="0" package="pester/Demo.Tests.ps1" time="0.428" timestamp="2026-11-26T15:42:05">
+    <properties>
+      <property name="junit-version" value="4" />
+      <property name="clr-version" value="11.0.0" />
+      <property name="cwd" value="tests/fixtures/junit" />
+      <property name="framework-version" value="6.2.0" />
+      <property name="platform" value="Linux" />
+      <property name="os-version" value="7.0.0-43-generic" />
+      <property name="machine-name" value="devbox" />
+      <property name="user-domain" value="" />
+      <property name="user" value="dev" />
+    </properties>
+    <testcase name="Audit.reads the audit log @pester.audit" status="Passed" classname="pester/Demo.Tests.ps1" assertions="0" time="0.064" />
+    <testcase name="Audit.writes the report @pester.report" status="Failed" classname="pester/Demo.Tests.ps1" assertions="0" time="0.074">
+      <failure message="Expected strings to be the same, but they were different.&#xA;String lengths are both 5.&#xA;Strings differ at index 0.&#xA;Expected: 'final'&#xA;But was:  'draft'&#xA;           ^">at 'draft' | Should -Be 'final', pester/Demo.Tests.ps1:10</failure>
+    </testcase>
+    <testcase name="Audit.audits a remote computer @pester.remote" status="Skipped" classname="pester/Demo.Tests.ps1" assertions="0" time="0.003">
+      <skipped message=""></skipped>
+    </testcase>
+    <testcase name="Inventory.lists the installed software" status="Passed" classname="pester/Demo.Tests.ps1" assertions="0" time="0.024" />
+  </testsuite>
+</testsuites>

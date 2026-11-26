@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="6" failures="1" errors="0" time="0.007414556">
+    <testsuite name="demo.sample.ts" timestamp="2026-11-26T15:42:04.866Z" hostname="devbox" tests="6" failures="1" errors="0" skipped="1" time="0.007414556">
+        <testcase classname="demo.sample.ts" name="users &gt; gets one user @vitest.get" time="0.001365314">
+        </testcase>
+        <testcase classname="demo.sample.ts" name="users &gt; gets every user @vitest.get-all" time="0.000677977">
+        </testcase>
+        <testcase classname="demo.sample.ts" name="users &gt; lists users @vitest.list" time="0.000150835">
+        </testcase>
+        <testcase classname="demo.sample.ts" name="users &gt; lists users in pages @vitest.list" time="0.003781317">
+            <failure message="expected &apos;page 2&apos; to be &apos;page 1&apos; // Object.is equality" type="AssertionError">
+AssertionError: expected &apos;page 2&apos; to be &apos;page 1&apos; // Object.is equality
+
+Expected: &quot;page 1&quot;
+Received: &quot;page 2&quot;
+
+ ❯ demo.sample.ts:20:22
+            </failure>
+        </testcase>
+        <testcase classname="demo.sample.ts" name="users &gt; exports users @vitest.export" time="0">
+            <skipped/>
+        </testcase>
+        <testcase classname="demo.sample.ts" name="users &gt; has a typo in its tag @vitest.gte" time="0.000169452">
+        </testcase>
+    </testsuite>
+</testsuites>

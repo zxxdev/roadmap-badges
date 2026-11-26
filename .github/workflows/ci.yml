@@ -50,8 +50,10 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      # The JUnit report is what the action reads below to compute this
+      # repository's own progress.
       - name: Test
-        run: pnpm test
+        run: pnpm test --reporter=default --reporter=junit --outputFile.junit=reports/junit.xml
 
       # GitHub runs dist/index.js as it is in the repository. If someone changes
       # src/ and forgets `pnpm bundle`, the published action would not do what
@@ -66,6 +68,14 @@ jobs:
             exit 1
           fi
 
+      # Runs the action from this checkout, exactly as another repository would,
+      # on this repository's catalog and the test report written above.
+      - name: Compute this repository's progress
+        uses: ./
+        with:
+          reports: reports/junit.xml
+          strict: true
+
   action:
     name: Run the action
     runs-on: ubuntu-latest
@@ -76,17 +86,17 @@ jobs:
         with:
           persist-credentials: false
 
-      # Runs the action from this checkout, exactly as another repository would.
-      - name: Run on this repository's own catalog
-        uses: ./
-
-      - name: Run on a valid example catalog
-        id: valid
+      # The example reports were written by Vitest, Pester and pytest
+      # (tests/fixtures/junit/generate.sh); catalog.yml works out the result by
+      # hand. The warning about the tag @vitest.gte is expected.
+      - name: Run on the example reports from real tools
+        id: examples
         uses: ./
         with:
-          catalog: tests/fixtures/catalogs/valid.yml
+          catalog: tests/fixtures/junit/catalog.yml
+          reports: tests/fixtures/junit/*.xml
 
-      # These two must fail. continue-on-error keeps the job going so the last
+      # These must fail. continue-on-error keeps the job going so the last
       # step can check that they did; their error annotations are expected.
       - name: Run on an invalid example catalog (expected to fail)
         id: invalid
@@ -102,13 +112,34 @@ jobs:
         with:
           catalog: no-such-file.yml
 
+      - name: Run with a reports pattern that matches nothing (expected to fail)
+        id: no-reports
+        continue-on-error: true
+        uses: ./
+        with:
+          catalog: tests/fixtures/junit/catalog.yml
+          reports: no-such-folder/*.xml
+
+      - name: Run with a misspelt tag in strict mode (expected to fail)
+        id: strict
+        continue-on-error: true
+        uses: ./
+        with:
+          catalog: tests/fixtures/junit/catalog.yml
+          reports: tests/fixtures/junit/*.xml
+          strict: true
+
       - name: Check the results
         env:
-          COUNTS: ${{ steps.valid.outputs.areas }}/${{ steps.valid.outputs.items }}/${{ steps.valid.outputs.dropped }}
+          COUNTS: ${{ steps.examples.outputs.areas }}/${{ steps.examples.outputs.items }}/${{ steps.examples.outputs.dropped }}/${{ steps.examples.outputs.done }}/${{ steps.examples.outputs.percent }}
           INVALID: ${{ steps.invalid.outcome }}
           MISSING: ${{ steps.missing.outcome }}
+          NO_REPORTS: ${{ steps.no-reports.outcome }}
+          STRICT: ${{ steps.strict.outcome }}
         run: |
-          test "$COUNTS" = "2/2/1" || { echo "::error::expected areas/items/dropped 2/2/1, got '$COUNTS'"; exit 1; }
+          test "$COUNTS" = "3/15/1/6/40" || { echo "::error::expected areas/items/dropped/done/percent 3/15/1/6/40, got '$COUNTS'"; exit 1; }
           test "$INVALID" = "failure" || { echo "::error::the invalid catalog should fail, got '$INVALID'"; exit 1; }
           test "$MISSING" = "failure" || { echo "::error::a missing catalog should fail, got '$MISSING'"; exit 1; }
+          test "$NO_REPORTS" = "failure" || { echo "::error::a pattern with no reports should fail, got '$NO_REPORTS'"; exit 1; }
+          test "$STRICT" = "failure" || { echo "::error::a misspelt tag in strict mode should fail, got '$STRICT'"; exit 1; }
           echo "All results are right."

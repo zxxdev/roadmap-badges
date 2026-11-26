@@ -13,6 +13,19 @@ inputs:
       file is missing or not valid.
     required: false
     default: progress.yml
+  reports:
+    description: >-
+      The JUnit XML reports that your tests write: glob patterns relative to the repository
+      root, one per line (for example reports/*.xml). Each pattern must match at least one
+      file. Needed when the catalog has items proved by tests.
+    required: false
+    default: ""
+  strict:
+    description: >-
+      Fail the step when a test name has a tag (@id) that matches no item in the catalog,
+      instead of warning. Such a tag is usually a misspelt id.
+    required: false
+    default: "false"
 
 outputs:
   areas:
@@ -21,6 +34,12 @@ outputs:
     description: Number of items that count towards the total (dropped items do not).
   dropped:
     description: Number of dropped items.
+  done:
+    description: Number of items done.
+  percent:
+    description: >-
+      Percentage of items done, rounded down so that 100 means all of them. Empty when there
+      is nothing to count.
 
 runs:
   using: node24

@@ -1,0 +1,86 @@
+# yaml-language-server: $schema=../../../schema/progress.schema.json
+#
+# Catalog for the example reports in this folder, which generate.sh writes with
+# Vitest, Pester and pytest. tests/examples.test.ts and the "Run the action" job
+# in CI check that the action gives the result worked out by hand here:
+# 6 of 15 items done (40 %), 1 dropped, and the tag @vitest.gte matches no item.
+project: junit-examples
+areas:
+  # 2 of 5 done: 40 %.
+  - id: vitest
+    title: Vitest
+    items:
+      - id: vitest.get # passes; the test tagged @vitest.get-all is not its test
+        title: Get one user
+        evidence: junit
+      - id: vitest.get-all # passes
+        title: Get every user
+        evidence: junit
+      - id: vitest.list # one test passes and one fails: not done
+        title: List users
+        evidence: junit
+      - id: vitest.export # skipped: not done
+        title: Export users
+        evidence: junit
+      - id: vitest.import # no test: not done
+        title: Import users
+        evidence: junit
+
+  # 2 of 4 done: 50 %.
+  - id: pester
+    title: Pester
+    items:
+      - id: pester.audit # passes
+        title: Read the audit log
+        evidence: junit
+      - id: pester.report # fails: not done
+        title: Write the report
+        evidence: junit
+      - id: pester.remote # skipped: not done
+        title: Audit a remote computer
+        evidence: junit
+      - id: pester.inventory # linked by its name, which has no tag; passes
+        title: List the installed software
+        evidence: junit
+        tests:
+          - name: Inventory.lists the installed software
+
+  # 2 of 6 done: 33 %. The dropped item does not count.
+  - id: pytest
+    title: pytest
+    items:
+      - id: pytest.parse # passes
+        title: Parse numbers
+        evidence: junit
+        tests:
+          - name: test_parse
+            classname: pytest.test_demo
+      - id: pytest.render # fails: not done
+        title: Render HTML
+        evidence: junit
+        tests:
+          - name: test_render
+      - id: pytest.network # skipped: not done
+        title: Call the network
+        evidence: junit
+        tests:
+          - name: test_network
+      - id: pytest.param # tagged through the id of a parametrized test; passes
+        title: Check parameters
+        evidence: junit
+      - id: pytest.setup # its fixture fails, so pytest writes an <error>: not done
+        title: Set up the database
+        evidence: junit
+        tests:
+          - name: test_setup
+      - id: pytest.removed # its test is in no report: not done
+        title: A test that was deleted
+        evidence: junit
+        tests:
+          - name: test_removed
+      - id: pytest.legacy # dropped: left out of the total although its test passes
+        title: Legacy parser
+        evidence: junit
+        tests:
+          - name: test_parse
+        dropped: Replaced by pytest.parse
