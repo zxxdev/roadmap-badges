@@ -5,6 +5,7 @@
  * It reads the catalog and the JUnit reports, decides which items are done and
  * reports the progress of each area. Drawing the badges comes next.
  */
+import { normalize } from "node:path";
 import { formatError, parseCatalog } from "./catalog/parse.js";
 import type { Catalog } from "./catalog/schema.js";
 import { evaluate, type Evaluation, type ItemResult, type Test } from "./evidence/evaluate.js";
@@ -151,11 +152,17 @@ async function readReports(
     runner.error(`roadmap-badges: ${message}`, location);
   };
 
+  // "reports/a.xml" and "./reports/a.xml" are the same file: read it once.
   const files: string[] = [];
+  const seen = new Set<string>();
   for (const pattern of patterns) {
     const found = runner.findFiles(pattern);
     if (found.length === 0) problem(`no file matches the reports pattern ${pattern}`);
-    for (const file of found) if (!files.includes(file)) files.push(file);
+    for (const file of found) {
+      if (seen.has(normalize(file))) continue;
+      seen.add(normalize(file));
+      files.push(file);
+    }
   }
 
   const cases: TestCase[] = [];

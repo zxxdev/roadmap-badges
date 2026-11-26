@@ -93,9 +93,10 @@ const MERGE_RANK: Record<TestStatus, number> = { skipped: 0, passed: 1, failed: 
 /**
  * A tag is "@" and an item id, as a whole word: "@api.get" in "@api.get-all"
  * is not a tag for api.get. The "@" cannot follow a letter or digit, so an
- * email address in a name is not a tag.
+ * email address in a name is not a tag, and the id cannot be followed by "/",
+ * so a scoped package such as "@types/node" is not one either.
  */
-const TAG = /(?<![A-Za-z0-9_])@([a-z0-9]+(?:[.-][a-z0-9]+)*)(?![A-Za-z0-9_]|[.-][A-Za-z0-9])/g;
+const TAG = /(?<![A-Za-z0-9_])@([a-z0-9]+(?:[.-][a-z0-9]+)*)(?![A-Za-z0-9_/]|[.-][A-Za-z0-9])/g;
 
 /** The item ids tagged in a test name, without repeats. */
 export function findTags(name: string): string[] {

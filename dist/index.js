@@ -1,5 +1,5 @@
-import { globSync, readFileSync } from 'node:fs';
-import { basename } from 'node:path';
+import { globSync, statSync, readFileSync } from 'node:fs';
+import { normalize, basename } from 'node:path';
 import * as os from 'os';
 import os__default, { EOL } from 'os';
 import * as crypto from 'crypto';
@@ -42146,9 +42146,10 @@ const MERGE_RANK = { skipped: 0, passed: 1, failed: 2, error: 3 };
 /**
  * A tag is "@" and an item id, as a whole word: "@api.get" in "@api.get-all"
  * is not a tag for api.get. The "@" cannot follow a letter or digit, so an
- * email address in a name is not a tag.
+ * email address in a name is not a tag, and the id cannot be followed by "/",
+ * so a scoped package such as "@types/node" is not one either.
  */
-const TAG = /(?<![A-Za-z0-9_])@([a-z0-9]+(?:[.-][a-z0-9]+)*)(?![A-Za-z0-9_]|[.-][A-Za-z0-9])/g;
+const TAG = /(?<![A-Za-z0-9_])@([a-z0-9]+(?:[.-][a-z0-9]+)*)(?![A-Za-z0-9_/]|[.-][A-Za-z0-9])/g;
 /** The item ids tagged in a test name, without repeats. */
 function findTags(name) {
     return [...new Set(Array.from(name.matchAll(TAG), (match) => match[1] ?? ""))];
@@ -44375,14 +44376,19 @@ async function readReports(runner, patterns) {
         problems.push(message);
         runner.error(`roadmap-badges: ${message}`, location);
     };
+    // "reports/a.xml" and "./reports/a.xml" are the same file: read it once.
     const files = [];
+    const seen = new Set();
     for (const pattern of patterns) {
         const found = runner.findFiles(pattern);
         if (found.length === 0)
             problem(`no file matches the reports pattern ${pattern}`);
-        for (const file of found)
-            if (!files.includes(file))
-                files.push(file);
+        for (const file of found) {
+            if (seen.has(normalize(file)))
+                continue;
+            seen.add(normalize(file));
+            files.push(file);
+        }
     }
     const cases = [];
     for (const file of files) {
@@ -44571,8 +44577,11 @@ await run({
         }
     },
     // Relative to the working directory, which is the repository's root in a
-    // workflow. Sorted, so the reports are always read in the same order.
-    findFiles: (pattern) => globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) }).sort(),
+    // workflow. Only files: "reports/**" also matches the folder itself. Sorted,
+    // so the reports are always read in the same order.
+    findFiles: (pattern) => globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) })
+        .filter((path) => statSync(path).isFile())
+        .sort(),
     setFailed: (message) => {
         setFailed(message);
     },

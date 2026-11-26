@@ -26,8 +26,8 @@ same malicious files through them in the development VM:
 2. **@xmldom/xmldom 0.9.** A DOM parser with no dependencies; it does not expand DTD entities.
    It reports an undefined entity as a non-fatal error and carries on, so the reader would have
    to collect errors itself to be sure nothing was skipped.
-3. **sax 1.6 in strict mode.** No dependencies, maintained by the author of npm, and over 100
-   million downloads a week on npm in November 2026. It never expands entities declared in a DOCTYPE and never loads external
+3. **sax 1.6 in strict mode.** No dependencies, maintained by the author of npm, and widely
+   used. It never expands entities declared in a DOCTYPE and never loads external
    ones: an entity that is not one of XML's five built-in ones is an error, with line and
    column. It decodes `&amp;` and character references, and reads the file as a stream of events.
 

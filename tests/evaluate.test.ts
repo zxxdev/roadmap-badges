@@ -308,6 +308,11 @@ describe("findTags @evidence.link", () => {
     ["no tag in an id with a mixed-case end", "mixed case @api.Get", []],
     ["no tag in an id with an underscore", "underscore @api_get", []],
     ["no tag in a lone at sign", "a lone @ sign", []],
+    ["no tag in a scoped package name", "resolves @types/node and @vitest/coverage", []],
+    // Known limits, documented in the README: some tools join names with a
+    // character that ids also use, and it becomes part of the tag.
+    ["Pester's dot after a tag in a Describe", "Login @auth.login.works", ["auth.login.works"]],
+    ["pytest's dash between stacked parameter ids", "test_x[@api.get-x]", ["api.get-x"]],
   ])("finds %s", (_case, name, tags) => {
     expect(findTags(name)).toEqual(tags);
   });

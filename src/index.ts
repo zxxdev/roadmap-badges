@@ -2,7 +2,7 @@
  * Entry point that GitHub runs (bundled into dist/index.js): connects run() to
  * the real runner through the GitHub Actions toolkit.
  */
-import { globSync, readFileSync } from "node:fs";
+import { globSync, readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import * as core from "@actions/core";
 import { run, type FileLocation } from "./main.js";
@@ -47,9 +47,12 @@ await run({
     }
   },
   // Relative to the working directory, which is the repository's root in a
-  // workflow. Sorted, so the reports are always read in the same order.
+  // workflow. Only files: "reports/**" also matches the folder itself. Sorted,
+  // so the reports are always read in the same order.
   findFiles: (pattern) =>
-    globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) }).sort(),
+    globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) })
+      .filter((path) => statSync(path).isFile())
+      .sort(),
   setFailed: (message) => {
     core.setFailed(message);
   },

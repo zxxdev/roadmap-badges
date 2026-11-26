@@ -209,11 +209,11 @@ Each tool writes JUnit in its own way. What to know about the common ones, from 
 [example reports](tests/fixtures/junit) that [generate.sh](tests/fixtures/junit/generate.sh)
 writes with the real tools:
 
-| Tool   | How to get JUnit XML                                                                           | Test name in the report                                                                                  |
-| ------ | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Vitest | `--reporter=junit --outputFile.junit=reports/junit.xml`                                        | `describe > test`, so a tag anywhere in the test's title works                                           |
-| Pester | `TestResult.Enabled = $true` and `TestResult.OutputFormat = 'JUnitXml'` (the default is NUnit) | `Describe.It`, so a tag in the `It` text works                                                           |
-| pytest | `--junitxml=reports/pytest.xml`                                                                | the function name, which cannot hold `@`: use a selector, or a parametrize id such as `ids=["@api.get"]` |
+| Tool   | How to get JUnit XML                                                                           | Test name in the report                                                                                                                                                                                     |
+| ------ | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Vitest | `--reporter=junit --outputFile.junit=reports/junit.xml`                                        | `describe > test`, so a tag anywhere in the test's title works                                                                                                                                              |
+| Pester | `TestResult.Enabled = $true` and `TestResult.OutputFormat = 'JUnitXml'` (the default is NUnit) | `Describe.It`: put the tag in the `It` text. At the end of a `Describe` it would run into the dot before the test's name and become part of the id                                                          |
+| pytest | `--junitxml=reports/pytest.xml`                                                                | the function name, which cannot hold `@`: use a selector, or the id of a single `parametrize`, such as `ids=["@api.get"]`. Stacked `parametrize` ids are joined with `-`, which would become part of the id |
 
 ## How it works
 
@@ -332,6 +332,8 @@ Known limits:
   read, but only from a hand-written case so far.
 - A test that passes without checking anything still proves its item. No rule based on test
   results can see that; the catalog and the tests are in the repository for anyone to read.
+- Tags are lowercase, like ids. A tag typed with capitals (`@Api.get`) is not read as a tag at
+  all, so `strict` does not catch it; its item shows as having no test.
 
 Planned, in order:
 

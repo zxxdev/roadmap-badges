@@ -284,6 +284,16 @@ areas:
     expect(done.summary).not.toContain("more than once");
   });
 
+  it("reads a file once when two patterns spell its path differently", async () => {
+    const { runner, done } = fakeRunner(
+      { reports: "reports/junit.xml\n./reports/junit.xml" },
+      { "progress.yml": CATALOG, "reports/junit.xml": PASSING, "./reports/junit.xml": PASSING },
+    );
+    await run(runner);
+
+    expect(done.logs).toContain("roadmap-badges: read 1 test from 1 report.");
+  });
+
   it("warns about a report with no test cases and carries on", async () => {
     const { runner, done } = fakeRunner(
       { reports: "a.xml\nnone.xml" },
