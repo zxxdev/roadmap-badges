@@ -28,6 +28,9 @@ areas:
       - id: evidence.link
         title: Link items to tests by tag or by selector
         evidence: junit
+      - id: evidence.progress
+        title: Decide which items are done and compute each area's progress
+        evidence: junit
       - id: evidence.manual
         title: Decide manual items by their done flag
         evidence: junit

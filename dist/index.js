@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { globSync, readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import * as os from 'os';
 import os__default, { EOL } from 'os';
 import * as crypto from 'crypto';
@@ -186,6 +187,10 @@ function prepareKeyValueMessage(key, value) {
 }
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
+
+function getDefaultExportFromCjs (x) {
+	return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, 'default') ? x['default'] : x;
+}
 
 var tunnel$1 = {};
 
@@ -29040,6 +29045,14 @@ function error$1(message, properties = {}) {
     issueCommand('error', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
+ * Adds a warning issue
+ * @param message warning issue message. Errors will be converted to string via toString()
+ * @param properties optional properties to add to the annotation.
+ */
+function warning(message, properties = {}) {
+    issueCommand('warning', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+}
+/**
  * Writes info to log with console.log.
  * @param message info message
  */
@@ -42124,51 +42137,2281 @@ function sortByPosition(errors) {
 }
 
 /**
+ * When the same test appears more than once (two reports, or a retry), a
+ * failure anywhere wins. Otherwise a pass wins over a skip: a test that runs
+ * and passes on one system and is skipped on another (a Windows-only test in
+ * a Linux and Windows build) has been proved.
+ */
+const MERGE_RANK = { skipped: 0, passed: 1, failed: 2, error: 3 };
+/**
+ * A tag is "@" and an item id, as a whole word: "@api.get" in "@api.get-all"
+ * is not a tag for api.get. The "@" cannot follow a letter or digit, so an
+ * email address in a name is not a tag.
+ */
+const TAG = /(?<![A-Za-z0-9_])@([a-z0-9]+(?:[.-][a-z0-9]+)*)(?![A-Za-z0-9_]|[.-][A-Za-z0-9])/g;
+/** The item ids tagged in a test name, without repeats. */
+function findTags(name) {
+    return [...new Set(Array.from(name.matchAll(TAG), (match) => match[1] ?? ""))];
+}
+/** Merges the cases that are the same test (same classname and name). */
+function mergeTests(cases) {
+    const tests = new Map();
+    for (const { classname, name, status, file, flaky } of cases) {
+        const key = `${classname}\u0000${name}`;
+        const seen = tests.get(key);
+        if (seen === undefined) {
+            tests.set(key, { classname, name, status, files: [file], runs: 1, flaky });
+            continue;
+        }
+        seen.runs += 1;
+        seen.flaky ||= flaky;
+        if (!seen.files.includes(file))
+            seen.files.push(file);
+        if (MERGE_RANK[status] > MERGE_RANK[seen.status])
+            seen.status = status;
+    }
+    return [...tests.values()];
+}
+function evaluate(catalog, cases) {
+    const tests = mergeTests(cases);
+    const ids = new Set(catalog.areas.flatMap((area) => area.items.map((item) => item.id)));
+    const tagged = new Map();
+    const orphans = new Map();
+    for (const test of tests) {
+        for (const tag of findTags(test.name)) {
+            append(ids.has(tag) ? tagged : orphans, tag, test);
+        }
+    }
+    const byName = new Map();
+    for (const test of tests)
+        append(byName, test.name, test);
+    const areas = catalog.areas.map((area) => {
+        const items = area.items.map((item) => judge(item, tagged, byName));
+        return {
+            id: area.id,
+            title: area.title,
+            ...progress(items),
+            dropped: items.filter((item) => item.status === "dropped").length,
+            items,
+        };
+    });
+    return {
+        ...progress(areas.flatMap((area) => area.items)),
+        areas,
+        orphans: [...orphans].map(([tag, list]) => ({ tag, tests: list })),
+        tests,
+    };
+}
+function judge(item, tagged, byName) {
+    const result = {
+        id: item.id,
+        title: item.title,
+        evidence: item.evidence,
+        status: "no-tests",
+        tests: [],
+        missing: [],
+    };
+    if (item.evidence === "manual") {
+        result.status = item.done ? "done" : "not-done";
+    }
+    else {
+        const linked = new Set(tagged.get(item.id));
+        for (const selector of item.tests ?? []) {
+            const found = (byName.get(selector.name) ?? []).filter((test) => selector.classname === undefined || test.classname === selector.classname);
+            if (found.length === 0)
+                result.missing.push(selector);
+            for (const test of found)
+                linked.add(test);
+        }
+        result.tests = [...linked];
+        result.status = junitStatus(result.tests, result.missing.length > 0);
+    }
+    if (item.dropped !== undefined) {
+        result.status = "dropped";
+        result.dropped = item.dropped;
+    }
+    return result;
+}
+/** The most serious reason first: a failure, then a test not found, then a skip. */
+function junitStatus(tests, missing) {
+    if (tests.some((test) => test.status === "failed" || test.status === "error"))
+        return "failed";
+    if (missing)
+        return "missing-tests";
+    if (tests.some((test) => test.status === "skipped"))
+        return "skipped";
+    return tests.length === 0 ? "no-tests" : "done";
+}
+function progress(items) {
+    const counted = items.filter((item) => item.status !== "dropped");
+    const done = counted.filter((item) => item.status === "done").length;
+    const total = counted.length;
+    // Rounded down: 199 of 200 is 99 %, not 100 %.
+    const percent = total === 0 ? null : Math.floor((done * 100) / total);
+    return { done, total, percent };
+}
+function append(map, key, value) {
+    const list = map.get(key);
+    if (list === undefined)
+        map.set(key, [value]);
+    else
+        list.push(value);
+}
+
+var sax$1 = {};
+
+var hasRequiredSax;
+
+function requireSax () {
+	if (hasRequiredSax) return sax$1;
+	hasRequiredSax = 1;
+	(function (exports) {
+(function (sax) {
+		  // wrapper for non-node envs
+		  sax.parser = function (strict, opt) {
+		    return new SAXParser(strict, opt)
+		  };
+		  sax.SAXParser = SAXParser;
+		  sax.SAXStream = SAXStream;
+		  sax.createStream = createStream;
+
+		  // When we pass the MAX_BUFFER_LENGTH position, start checking for buffer overruns.
+		  // When we check, schedule the next check for MAX_BUFFER_LENGTH - (max(buffer lengths)),
+		  // since that's the earliest that a buffer overrun could occur.  This way, checks are
+		  // as rare as required, but as often as necessary to ensure never crossing this bound.
+		  // Furthermore, buffers are only tested at most once per write(), so passing a very
+		  // large string into write() might have undesirable effects, but this is manageable by
+		  // the caller, so it is assumed to be safe.  Thus, a call to write() may, in the extreme
+		  // edge case, result in creating at most one complete copy of the string passed in.
+		  // Set to Infinity to have unlimited buffers.
+		  sax.MAX_BUFFER_LENGTH = 64 * 1024;
+
+		  var buffers = [
+		    'comment',
+		    'sgmlDecl',
+		    'textNode',
+		    'tagName',
+		    'doctype',
+		    'procInstName',
+		    'procInstBody',
+		    'entity',
+		    'attribName',
+		    'attribValue',
+		    'cdata',
+		    'script',
+		  ];
+
+		  sax.EVENTS = [
+		    'text',
+		    'processinginstruction',
+		    'sgmldeclaration',
+		    'doctype',
+		    'comment',
+		    'opentagstart',
+		    'attribute',
+		    'opentag',
+		    'closetag',
+		    'opencdata',
+		    'cdata',
+		    'closecdata',
+		    'error',
+		    'end',
+		    'ready',
+		    'script',
+		    'opennamespace',
+		    'closenamespace',
+		  ];
+
+		  function SAXParser(strict, opt) {
+		    if (!(this instanceof SAXParser)) {
+		      return new SAXParser(strict, opt)
+		    }
+
+		    var parser = this;
+		    clearBuffers(parser);
+		    parser.q = parser.c = '';
+		    parser.bufferCheckPosition = sax.MAX_BUFFER_LENGTH;
+		    parser.encoding = null;
+		    parser.opt = opt || {};
+		    parser.opt.lowercase = parser.opt.lowercase || parser.opt.lowercasetags;
+		    parser.looseCase = parser.opt.lowercase ? 'toLowerCase' : 'toUpperCase';
+		    parser.opt.maxEntityCount = parser.opt.maxEntityCount || 512;
+		    parser.opt.maxEntityDepth = parser.opt.maxEntityDepth || 4;
+		    parser.entityCount = parser.entityDepth = 0;
+		    parser.tags = [];
+		    parser.closed = parser.closedRoot = parser.sawRoot = false;
+		    parser.tag = parser.error = null;
+		    parser.strict = !!strict;
+		    parser.noscript = !!(strict || parser.opt.noscript);
+		    parser.state = S.BEGIN;
+		    parser.strictEntities = parser.opt.strictEntities;
+		    parser.ENTITIES =
+		      parser.strictEntities ?
+		        Object.create(sax.XML_ENTITIES)
+		      : Object.create(sax.ENTITIES);
+		    parser.attribList = [];
+
+		    // namespaces form a prototype chain.
+		    // it always points at the current tag,
+		    // which protos to its parent tag.
+		    if (parser.opt.xmlns) {
+		      parser.ns = Object.create(rootNS);
+		    }
+
+		    // disallow unquoted attribute values if not otherwise configured
+		    // and strict mode is true
+		    if (parser.opt.unquotedAttributeValues === undefined) {
+		      parser.opt.unquotedAttributeValues = !strict;
+		    }
+
+		    // mostly just for error reporting
+		    parser.trackPosition = parser.opt.position !== false;
+		    if (parser.trackPosition) {
+		      parser.position = parser.line = parser.column = 0;
+		    }
+		    emit(parser, 'onready');
+		  }
+
+		  if (!Object.create) {
+		    Object.create = function (o) {
+		      function F() {}
+		      F.prototype = o;
+		      var newf = new F();
+		      return newf
+		    };
+		  }
+
+		  if (!Object.keys) {
+		    Object.keys = function (o) {
+		      var a = [];
+		      for (var i in o) if (o.hasOwnProperty(i)) a.push(i);
+		      return a
+		    };
+		  }
+
+		  function checkBufferLength(parser) {
+		    var maxAllowed = Math.max(sax.MAX_BUFFER_LENGTH, 10);
+		    var maxActual = 0;
+		    for (var i = 0, l = buffers.length; i < l; i++) {
+		      var len = parser[buffers[i]].length;
+		      if (len > maxAllowed) {
+		        // Text/cdata nodes can get big, and since they're buffered,
+		        // we can get here under normal conditions.
+		        // Avoid issues by emitting the text node now,
+		        // so at least it won't get any bigger.
+		        switch (buffers[i]) {
+		          case 'textNode':
+		            closeText(parser);
+		            break
+
+		          case 'cdata':
+		            emitNode(parser, 'oncdata', parser.cdata);
+		            parser.cdata = '';
+		            break
+
+		          case 'script':
+		            emitNode(parser, 'onscript', parser.script);
+		            parser.script = '';
+		            break
+
+		          default:
+		            error(parser, 'Max buffer length exceeded: ' + buffers[i]);
+		        }
+		      }
+		      maxActual = Math.max(maxActual, len);
+		    }
+		    // schedule the next check for the earliest possible buffer overrun.
+		    var m = sax.MAX_BUFFER_LENGTH - maxActual;
+		    parser.bufferCheckPosition = m + parser.position;
+		  }
+
+		  function clearBuffers(parser) {
+		    for (var i = 0, l = buffers.length; i < l; i++) {
+		      parser[buffers[i]] = '';
+		    }
+		  }
+
+		  function flushBuffers(parser) {
+		    closeText(parser);
+		    if (parser.cdata !== '') {
+		      emitNode(parser, 'oncdata', parser.cdata);
+		      parser.cdata = '';
+		    }
+		    if (parser.script !== '') {
+		      emitNode(parser, 'onscript', parser.script);
+		      parser.script = '';
+		    }
+		  }
+
+		  SAXParser.prototype = {
+		    end: function () {
+		      end(this);
+		    },
+		    write: write,
+		    resume: function () {
+		      this.error = null;
+		      return this
+		    },
+		    close: function () {
+		      return this.write(null)
+		    },
+		    flush: function () {
+		      flushBuffers(this);
+		    },
+		  };
+
+		  var Stream;
+		  try {
+		    Stream = require('stream').Stream;
+		  } catch (ex) {
+		    Stream = function () {};
+		  }
+		  if (!Stream) Stream = function () {};
+
+		  var streamWraps = sax.EVENTS.filter(function (ev) {
+		    return ev !== 'error' && ev !== 'end'
+		  });
+
+		  function createStream(strict, opt) {
+		    return new SAXStream(strict, opt)
+		  }
+
+		  function determineBufferEncoding(data, isEnd) {
+		    // BOM-based detection is the most reliable signal when present.
+		    if (data.length >= 2) {
+		      if (data[0] === 0xff && data[1] === 0xfe) {
+		        return 'utf-16le'
+		      }
+
+		      if (data[0] === 0xfe && data[1] === 0xff) {
+		        return 'utf-16be'
+		      }
+		    }
+
+		    if (data.length >= 3 && data[0] === 0xef && data[1] === 0xbb && data[2] === 0xbf) {
+		      return 'utf8'
+		    }
+
+		    if (data.length >= 4) {
+		      // XML documents without a BOM still start with "<?xml", which is enough
+		      // to distinguish UTF-16LE/BE from UTF-8 by looking at the zero bytes.
+		      if (data[0] === 0x3c && data[1] === 0x00 && data[2] === 0x3f && data[3] === 0x00) {
+		        return 'utf-16le'
+		      }
+
+		      if (data[0] === 0x00 && data[1] === 0x3c && data[2] === 0x00 && data[3] === 0x3f) {
+		        return 'utf-16be'
+		      }
+
+		      return 'utf8'
+		    }
+
+		    return isEnd ? 'utf8' : null
+		  }
+
+		  function SAXStream(strict, opt) {
+		    if (!(this instanceof SAXStream)) {
+		      return new SAXStream(strict, opt)
+		    }
+
+		    Stream.apply(this);
+
+		    this._parser = new SAXParser(strict, opt);
+		    this.writable = true;
+		    this.readable = true;
+
+		    var me = this;
+
+		    this._parser.onend = function () {
+		      me.emit('end');
+		    };
+
+		    this._parser.onerror = function (er) {
+		      me.emit('error', er);
+
+		      // if didn't throw, then means error was handled.
+		      // go ahead and clear error, so we can write again.
+		      me._parser.error = null;
+		    };
+
+		    this._decoder = null;
+		    this._decoderBuffer = null;
+		    streamWraps.forEach(function (ev) {
+		      Object.defineProperty(me, 'on' + ev, {
+		        get: function () {
+		          return me._parser['on' + ev]
+		        },
+		        set: function (h) {
+		          if (!h) {
+		            me.removeAllListeners(ev);
+		            me._parser['on' + ev] = h;
+		            return h
+		          }
+		          me.on(ev, h);
+		        },
+		        enumerable: true,
+		        configurable: false,
+		      });
+		    });
+		  }
+
+		  SAXStream.prototype = Object.create(Stream.prototype, {
+		    constructor: {
+		      value: SAXStream,
+		    },
+		  });
+
+		  SAXStream.prototype._decodeBuffer = function (data, isEnd) {
+		    if (this._decoderBuffer) {
+		      // Keep incomplete leading bytes until we have enough data to infer the
+		      // stream encoding, then decode the buffered prefix together with the next chunk.
+		      data = Buffer.concat([this._decoderBuffer, data]);
+		      this._decoderBuffer = null;
+		    }
+
+		    if (!this._decoder) {
+		      var encoding = determineBufferEncoding(data, isEnd);
+		      if (!encoding) {
+		        // A very short first chunk may not contain enough bytes to detect the
+		        // encoding yet, so defer decoding until the next write/end call.
+		        this._decoderBuffer = data;
+		        return ''
+		      }
+
+		      // Store the detected transport encoding so strict mode can compare it
+		      // with the optional encoding declared in the XML prolog later on.
+		      this._parser.encoding = encoding;
+		      this._decoder = new TextDecoder(encoding);
+		    }
+
+		    return this._decoder.decode(data, { stream: !isEnd })
+		  };
+
+		  SAXStream.prototype.write = function (data) {
+		    if (
+		      typeof Buffer === 'function' &&
+		      typeof Buffer.isBuffer === 'function' &&
+		      Buffer.isBuffer(data)
+		    ) {
+		      data = this._decodeBuffer(data, false);
+		    } else if (this._decoderBuffer) {
+		      // Flush any buffered binary prefix before handling a string chunk.
+		      // This only matters if the caller mixes Buffer and string writes (used in test).
+		      var remaining = this._decodeBuffer(Buffer.alloc(0), true);
+		      if (remaining) {
+		        this._parser.write(remaining);
+		        this.emit('data', remaining);
+		      }
+		    }
+
+		    this._parser.write(data.toString());
+		    this.emit('data', data);
+		    return true
+		  };
+
+		  SAXStream.prototype.end = function (chunk) {
+		    if (chunk && chunk.length) {
+		      this.write(chunk);
+		    }
+		    // Flush any remaining decoded data from the TextDecoder
+		    if (this._decoderBuffer) {
+		      var finalChunk = this._decodeBuffer(Buffer.alloc(0), true);
+		      if (finalChunk) {
+		        this._parser.write(finalChunk);
+		        this.emit('data', finalChunk);
+		      }
+		    } else if (this._decoder) {
+		      var remaining = this._decoder.decode();
+		      if (remaining) {
+		        this._parser.write(remaining);
+		        this.emit('data', remaining);
+		      }
+		    }
+		    this._parser.end();
+		    return true
+		  };
+
+		  SAXStream.prototype.on = function (ev, handler) {
+		    var me = this;
+		    if (!me._parser['on' + ev] && streamWraps.indexOf(ev) !== -1) {
+		      me._parser['on' + ev] = function () {
+		        var args =
+		          arguments.length === 1 ?
+		            [arguments[0]]
+		          : Array.apply(null, arguments);
+		        args.splice(0, 0, ev);
+		        me.emit.apply(me, args);
+		      };
+		    }
+
+		    return Stream.prototype.on.call(me, ev, handler)
+		  };
+
+		  // this really needs to be replaced with character classes.
+		  // XML allows all manner of ridiculous numbers and digits.
+		  var CDATAre = /^\[CDATA\[$/i;
+		  var DOCTYPEre = /^DOCTYPE$/i;
+		  var XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace';
+		  var XMLNS_NAMESPACE = 'http://www.w3.org/2000/xmlns/';
+		  var rootNS = { xml: XML_NAMESPACE, xmlns: XMLNS_NAMESPACE };
+
+		  // http://www.w3.org/TR/REC-xml/#NT-NameStartChar
+		  // This implementation works on strings, a single character at a time
+		  // as such, it cannot ever support astral-plane characters (10000-EFFFF)
+		  // without a significant breaking change to either this  parser, or the
+		  // JavaScript language.  Implementation of an emoji-capable xml parser
+		  // is left as an exercise for the reader.
+		  var nameStart =
+		    /[:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]/;
+
+		  var nameBody =
+		    /[:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u00B7\u0300-\u036F\u203F-\u2040.\d-]/;
+
+		  var entityStart =
+		    /[#:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD]/;
+		  var entityBody =
+		    /[#:_A-Za-z\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u02FF\u0370-\u037D\u037F-\u1FFF\u200C-\u200D\u2070-\u218F\u2C00-\u2FEF\u3001-\uD7FF\uF900-\uFDCF\uFDF0-\uFFFD\u00B7\u0300-\u036F\u203F-\u2040.\d-]/;
+
+		  function isWhitespace(c) {
+		    return c === ' ' || c === '\n' || c === '\r' || c === '\t'
+		  }
+
+		  function isQuote(c) {
+		    return c === '"' || c === "'"
+		  }
+
+		  function isAttribEnd(c) {
+		    return c === '>' || isWhitespace(c)
+		  }
+
+		  function isMatch(regex, c) {
+		    return regex.test(c)
+		  }
+
+		  function notMatch(regex, c) {
+		    return !isMatch(regex, c)
+		  }
+
+		  var S = 0;
+		  sax.STATE = {
+		    BEGIN: S++, // leading byte order mark or whitespace
+		    BEGIN_WHITESPACE: S++, // leading whitespace
+		    TEXT: S++, // general stuff
+		    TEXT_ENTITY: S++, // &amp and such.
+		    OPEN_WAKA: S++, // <
+		    SGML_DECL: S++, // <!BLARG
+		    SGML_DECL_QUOTED: S++, // <!BLARG foo "bar
+		    DOCTYPE: S++, // <!DOCTYPE
+		    DOCTYPE_QUOTED: S++, // <!DOCTYPE "//blah
+		    DOCTYPE_DTD: S++, // <!DOCTYPE "//blah" [ ...
+		    DOCTYPE_DTD_QUOTED: S++, // <!DOCTYPE "//blah" [ "foo
+		    COMMENT_STARTING: S++, // <!-
+		    COMMENT: S++, // <!--
+		    COMMENT_ENDING: S++, // <!-- blah -
+		    COMMENT_ENDED: S++, // <!-- blah --
+		    CDATA: S++, // <![CDATA[ something
+		    CDATA_ENDING: S++, // ]
+		    CDATA_ENDING_2: S++, // ]]
+		    PROC_INST: S++, // <?hi
+		    PROC_INST_BODY: S++, // <?hi there
+		    PROC_INST_ENDING: S++, // <?hi "there" ?
+		    OPEN_TAG: S++, // <strong
+		    OPEN_TAG_SLASH: S++, // <strong /
+		    ATTRIB: S++, // <a
+		    ATTRIB_NAME: S++, // <a foo
+		    ATTRIB_NAME_SAW_WHITE: S++, // <a foo _
+		    ATTRIB_VALUE: S++, // <a foo=
+		    ATTRIB_VALUE_QUOTED: S++, // <a foo="bar
+		    ATTRIB_VALUE_CLOSED: S++, // <a foo="bar"
+		    ATTRIB_VALUE_UNQUOTED: S++, // <a foo=bar
+		    ATTRIB_VALUE_ENTITY_Q: S++, // <foo bar="&quot;"
+		    ATTRIB_VALUE_ENTITY_U: S++, // <foo bar=&quot
+		    CLOSE_TAG: S++, // </a
+		    CLOSE_TAG_SAW_WHITE: S++, // </a   >
+		    SCRIPT: S++, // <script> ...
+		    SCRIPT_ENDING: S++, // <script> ... <
+		  };
+
+		  sax.XML_ENTITIES = Object.assign(Object.create(null), {
+		    amp: '&',
+		    gt: '>',
+		    lt: '<',
+		    quot: '"',
+		    apos: "'",
+		  });
+
+		  sax.ENTITIES = Object.assign(Object.create(null), {
+		    amp: '&',
+		    gt: '>',
+		    lt: '<',
+		    quot: '"',
+		    apos: "'",
+		    AElig: 198,
+		    Aacute: 193,
+		    Acirc: 194,
+		    Agrave: 192,
+		    Aring: 197,
+		    Atilde: 195,
+		    Auml: 196,
+		    Ccedil: 199,
+		    ETH: 208,
+		    Eacute: 201,
+		    Ecirc: 202,
+		    Egrave: 200,
+		    Euml: 203,
+		    Iacute: 205,
+		    Icirc: 206,
+		    Igrave: 204,
+		    Iuml: 207,
+		    Ntilde: 209,
+		    Oacute: 211,
+		    Ocirc: 212,
+		    Ograve: 210,
+		    Oslash: 216,
+		    Otilde: 213,
+		    Ouml: 214,
+		    THORN: 222,
+		    Uacute: 218,
+		    Ucirc: 219,
+		    Ugrave: 217,
+		    Uuml: 220,
+		    Yacute: 221,
+		    aacute: 225,
+		    acirc: 226,
+		    aelig: 230,
+		    agrave: 224,
+		    aring: 229,
+		    atilde: 227,
+		    auml: 228,
+		    ccedil: 231,
+		    eacute: 233,
+		    ecirc: 234,
+		    egrave: 232,
+		    eth: 240,
+		    euml: 235,
+		    iacute: 237,
+		    icirc: 238,
+		    igrave: 236,
+		    iuml: 239,
+		    ntilde: 241,
+		    oacute: 243,
+		    ocirc: 244,
+		    ograve: 242,
+		    oslash: 248,
+		    otilde: 245,
+		    ouml: 246,
+		    szlig: 223,
+		    thorn: 254,
+		    uacute: 250,
+		    ucirc: 251,
+		    ugrave: 249,
+		    uuml: 252,
+		    yacute: 253,
+		    yuml: 255,
+		    copy: 169,
+		    reg: 174,
+		    nbsp: 160,
+		    iexcl: 161,
+		    cent: 162,
+		    pound: 163,
+		    curren: 164,
+		    yen: 165,
+		    brvbar: 166,
+		    sect: 167,
+		    uml: 168,
+		    ordf: 170,
+		    laquo: 171,
+		    not: 172,
+		    shy: 173,
+		    macr: 175,
+		    deg: 176,
+		    plusmn: 177,
+		    sup1: 185,
+		    sup2: 178,
+		    sup3: 179,
+		    acute: 180,
+		    micro: 181,
+		    para: 182,
+		    middot: 183,
+		    cedil: 184,
+		    ordm: 186,
+		    raquo: 187,
+		    frac14: 188,
+		    frac12: 189,
+		    frac34: 190,
+		    iquest: 191,
+		    times: 215,
+		    divide: 247,
+		    OElig: 338,
+		    oelig: 339,
+		    Scaron: 352,
+		    scaron: 353,
+		    Yuml: 376,
+		    fnof: 402,
+		    circ: 710,
+		    tilde: 732,
+		    Alpha: 913,
+		    Beta: 914,
+		    Gamma: 915,
+		    Delta: 916,
+		    Epsilon: 917,
+		    Zeta: 918,
+		    Eta: 919,
+		    Theta: 920,
+		    Iota: 921,
+		    Kappa: 922,
+		    Lambda: 923,
+		    Mu: 924,
+		    Nu: 925,
+		    Xi: 926,
+		    Omicron: 927,
+		    Pi: 928,
+		    Rho: 929,
+		    Sigma: 931,
+		    Tau: 932,
+		    Upsilon: 933,
+		    Phi: 934,
+		    Chi: 935,
+		    Psi: 936,
+		    Omega: 937,
+		    alpha: 945,
+		    beta: 946,
+		    gamma: 947,
+		    delta: 948,
+		    epsilon: 949,
+		    zeta: 950,
+		    eta: 951,
+		    theta: 952,
+		    iota: 953,
+		    kappa: 954,
+		    lambda: 955,
+		    mu: 956,
+		    nu: 957,
+		    xi: 958,
+		    omicron: 959,
+		    pi: 960,
+		    rho: 961,
+		    sigmaf: 962,
+		    sigma: 963,
+		    tau: 964,
+		    upsilon: 965,
+		    phi: 966,
+		    chi: 967,
+		    psi: 968,
+		    omega: 969,
+		    thetasym: 977,
+		    upsih: 978,
+		    piv: 982,
+		    ensp: 8194,
+		    emsp: 8195,
+		    thinsp: 8201,
+		    zwnj: 8204,
+		    zwj: 8205,
+		    lrm: 8206,
+		    rlm: 8207,
+		    ndash: 8211,
+		    mdash: 8212,
+		    lsquo: 8216,
+		    rsquo: 8217,
+		    sbquo: 8218,
+		    ldquo: 8220,
+		    rdquo: 8221,
+		    bdquo: 8222,
+		    dagger: 8224,
+		    Dagger: 8225,
+		    bull: 8226,
+		    hellip: 8230,
+		    permil: 8240,
+		    prime: 8242,
+		    Prime: 8243,
+		    lsaquo: 8249,
+		    rsaquo: 8250,
+		    oline: 8254,
+		    frasl: 8260,
+		    euro: 8364,
+		    image: 8465,
+		    weierp: 8472,
+		    real: 8476,
+		    trade: 8482,
+		    alefsym: 8501,
+		    larr: 8592,
+		    uarr: 8593,
+		    rarr: 8594,
+		    darr: 8595,
+		    harr: 8596,
+		    crarr: 8629,
+		    lArr: 8656,
+		    uArr: 8657,
+		    rArr: 8658,
+		    dArr: 8659,
+		    hArr: 8660,
+		    forall: 8704,
+		    part: 8706,
+		    exist: 8707,
+		    empty: 8709,
+		    nabla: 8711,
+		    isin: 8712,
+		    notin: 8713,
+		    ni: 8715,
+		    prod: 8719,
+		    sum: 8721,
+		    minus: 8722,
+		    lowast: 8727,
+		    radic: 8730,
+		    prop: 8733,
+		    infin: 8734,
+		    ang: 8736,
+		    and: 8743,
+		    or: 8744,
+		    cap: 8745,
+		    cup: 8746,
+		    int: 8747,
+		    there4: 8756,
+		    sim: 8764,
+		    cong: 8773,
+		    asymp: 8776,
+		    ne: 8800,
+		    equiv: 8801,
+		    le: 8804,
+		    ge: 8805,
+		    sub: 8834,
+		    sup: 8835,
+		    nsub: 8836,
+		    sube: 8838,
+		    supe: 8839,
+		    oplus: 8853,
+		    otimes: 8855,
+		    perp: 8869,
+		    sdot: 8901,
+		    lceil: 8968,
+		    rceil: 8969,
+		    lfloor: 8970,
+		    rfloor: 8971,
+		    lang: 9001,
+		    rang: 9002,
+		    loz: 9674,
+		    spades: 9824,
+		    clubs: 9827,
+		    hearts: 9829,
+		    diams: 9830,
+		  });
+
+		  Object.keys(sax.ENTITIES).forEach(function (key) {
+		    var e = sax.ENTITIES[key];
+		    var s = typeof e === 'number' ? String.fromCharCode(e) : e;
+		    sax.ENTITIES[key] = s;
+		  });
+
+		  for (var s in sax.STATE) {
+		    sax.STATE[sax.STATE[s]] = s;
+		  }
+
+		  // shorthand
+		  S = sax.STATE;
+
+		  function emit(parser, event, data) {
+		    parser[event] && parser[event](data);
+		  }
+
+		  function getDeclaredEncoding(body) {
+		    var match = body && body.match(/(?:^|\s)encoding\s*=\s*(['"])([^'"]+)\1/i);
+		    return match ? match[2] : null
+		  }
+
+		  function normalizeEncodingName(encoding) {
+		    if (!encoding) {
+		      return null
+		    }
+
+		    return encoding.toLowerCase().replace(/[^a-z0-9]/g, '')
+		  }
+
+		  function encodingsMatch(detectedEncoding, declaredEncoding) {
+		    const detected = normalizeEncodingName(detectedEncoding);
+		    const declared = normalizeEncodingName(declaredEncoding);
+
+		    if (!detected || !declared) {
+		      return true
+		    }
+
+		    if (declared === 'utf16') {
+		      return detected === 'utf16le' || detected === 'utf16be'
+		    }
+
+		    return detected === declared
+		  }
+
+		  function validateXmlDeclarationEncoding(parser, data) {
+		    if (
+		      !parser.strict ||
+		      !parser.encoding ||
+		      !data ||
+		      data.name !== 'xml'
+		    ) {
+		      return
+		    }
+
+		    var declaredEncoding = getDeclaredEncoding(data.body);
+		    if (
+		      declaredEncoding &&
+		      !encodingsMatch(parser.encoding, declaredEncoding)
+		    ) {
+		      strictFail(
+		        parser,
+		        'XML declaration encoding ' +
+		          declaredEncoding +
+		          ' does not match detected stream encoding ' +
+		          parser.encoding.toUpperCase()
+		      );
+		    }
+		  }
+
+		  function emitNode(parser, nodeType, data) {
+		    if (parser.textNode) closeText(parser);
+		    emit(parser, nodeType, data);
+		  }
+
+		  function closeText(parser) {
+		    parser.textNode = textopts(parser.opt, parser.textNode);
+		    if (parser.textNode) emit(parser, 'ontext', parser.textNode);
+		    parser.textNode = '';
+		  }
+
+		  function textopts(opt, text) {
+		    if (opt.trim) text = text.trim();
+		    if (opt.normalize) text = text.replace(/\s+/g, ' ');
+		    return text
+		  }
+
+		  function error(parser, er) {
+		    closeText(parser);
+		    if (parser.trackPosition) {
+		      er +=
+		        '\nLine: ' +
+		        parser.line +
+		        '\nColumn: ' +
+		        parser.column +
+		        '\nChar: ' +
+		        parser.c;
+		    }
+		    er = new Error(er);
+		    parser.error = er;
+		    emit(parser, 'onerror', er);
+		    return parser
+		  }
+
+		  function end(parser) {
+		    if (parser.sawRoot && !parser.closedRoot)
+		      strictFail(parser, 'Unclosed root tag');
+		    if (
+		      parser.state !== S.BEGIN &&
+		      parser.state !== S.BEGIN_WHITESPACE &&
+		      parser.state !== S.TEXT
+		    ) {
+		      error(parser, 'Unexpected end');
+		    }
+		    closeText(parser);
+		    parser.c = '';
+		    parser.closed = true;
+		    emit(parser, 'onend');
+		    SAXParser.call(parser, parser.strict, parser.opt);
+		    return parser
+		  }
+
+		  function strictFail(parser, message) {
+		    if (typeof parser !== 'object' || !(parser instanceof SAXParser)) {
+		      throw new Error('bad call to strictFail')
+		    }
+		    if (parser.strict) {
+		      error(parser, message);
+		    }
+		  }
+
+		  function newTag(parser) {
+		    if (!parser.strict) parser.tagName = parser.tagName[parser.looseCase]();
+		    var parent = parser.tags[parser.tags.length - 1] || parser;
+		    var tag = (parser.tag = { name: parser.tagName, attributes: {} });
+
+		    // will be overridden if tag contails an xmlns="foo" or xmlns:foo="bar"
+		    if (parser.opt.xmlns) {
+		      tag.ns = parent.ns;
+		    }
+		    parser.attribList.length = 0;
+		    emitNode(parser, 'onopentagstart', tag);
+		  }
+
+		  function qname(name, attribute) {
+		    var i = name.indexOf(':');
+		    var qualName = i < 0 ? ['', name] : name.split(':');
+		    var prefix = qualName[0];
+		    var local = qualName[1];
+
+		    // <x "xmlns"="http://foo">
+		    if (attribute && name === 'xmlns') {
+		      prefix = 'xmlns';
+		      local = '';
+		    }
+
+		    return { prefix: prefix, local: local }
+		  }
+
+		  function attrib(parser) {
+		    if (!parser.strict) {
+		      parser.attribName = parser.attribName[parser.looseCase]();
+		    }
+
+		    if (
+		      parser.attribList.indexOf(parser.attribName) !== -1 ||
+		      parser.tag.attributes.hasOwnProperty(parser.attribName)
+		    ) {
+		      parser.attribName = parser.attribValue = '';
+		      return
+		    }
+
+		    if (parser.opt.xmlns) {
+		      var qn = qname(parser.attribName, true);
+		      var prefix = qn.prefix;
+		      var local = qn.local;
+
+		      if (prefix === 'xmlns') {
+		        // namespace binding attribute. push the binding into scope
+		        if (local === 'xml' && parser.attribValue !== XML_NAMESPACE) {
+		          strictFail(
+		            parser,
+		            'xml: prefix must be bound to ' +
+		              XML_NAMESPACE +
+		              '\n' +
+		              'Actual: ' +
+		              parser.attribValue
+		          );
+		        } else if (
+		          local === 'xmlns' &&
+		          parser.attribValue !== XMLNS_NAMESPACE
+		        ) {
+		          strictFail(
+		            parser,
+		            'xmlns: prefix must be bound to ' +
+		              XMLNS_NAMESPACE +
+		              '\n' +
+		              'Actual: ' +
+		              parser.attribValue
+		          );
+		        } else {
+		          var tag = parser.tag;
+		          var parent = parser.tags[parser.tags.length - 1] || parser;
+		          if (tag.ns === parent.ns) {
+		            tag.ns = Object.create(parent.ns);
+		          }
+		          tag.ns[local] = parser.attribValue;
+		        }
+		      }
+
+		      // defer onattribute events until all attributes have been seen
+		      // so any new bindings can take effect. preserve attribute order
+		      // so deferred events can be emitted in document order
+		      parser.attribList.push([parser.attribName, parser.attribValue]);
+		    } else {
+		      // in non-xmlns mode, we can emit the event right away
+		      parser.tag.attributes[parser.attribName] = parser.attribValue;
+		      emitNode(parser, 'onattribute', {
+		        name: parser.attribName,
+		        value: parser.attribValue,
+		      });
+		    }
+
+		    parser.attribName = parser.attribValue = '';
+		  }
+
+		  function openTag(parser, selfClosing) {
+		    if (parser.opt.xmlns) {
+		      // emit namespace binding events
+		      var tag = parser.tag;
+
+		      // add namespace info to tag
+		      var qn = qname(parser.tagName);
+		      tag.prefix = qn.prefix;
+		      tag.local = qn.local;
+		      tag.uri = tag.ns[qn.prefix] || '';
+
+		      if (tag.prefix && !tag.uri) {
+		        strictFail(
+		          parser,
+		          'Unbound namespace prefix: ' + JSON.stringify(parser.tagName)
+		        );
+		        tag.uri = qn.prefix;
+		      }
+
+		      var parent = parser.tags[parser.tags.length - 1] || parser;
+		      if (tag.ns && parent.ns !== tag.ns) {
+		        Object.keys(tag.ns).forEach(function (p) {
+		          emitNode(parser, 'onopennamespace', {
+		            prefix: p,
+		            uri: tag.ns[p],
+		          });
+		        });
+		      }
+
+		      // handle deferred onattribute events
+		      // Note: do not apply default ns to attributes:
+		      //   http://www.w3.org/TR/REC-xml-names/#defaulting
+		      for (var i = 0, l = parser.attribList.length; i < l; i++) {
+		        var nv = parser.attribList[i];
+		        var name = nv[0];
+		        var value = nv[1];
+		        var qualName = qname(name, true);
+		        var prefix = qualName.prefix;
+		        var local = qualName.local;
+		        var uri = prefix === '' ? '' : tag.ns[prefix] || '';
+		        var a = {
+		          name: name,
+		          value: value,
+		          prefix: prefix,
+		          local: local,
+		          uri: uri,
+		        };
+
+		        // if there's any attributes with an undefined namespace,
+		        // then fail on them now.
+		        if (prefix && prefix !== 'xmlns' && !uri) {
+		          strictFail(
+		            parser,
+		            'Unbound namespace prefix: ' + JSON.stringify(prefix)
+		          );
+		          a.uri = prefix;
+		        }
+		        parser.tag.attributes[name] = a;
+		        emitNode(parser, 'onattribute', a);
+		      }
+		      parser.attribList.length = 0;
+		    }
+
+		    parser.tag.isSelfClosing = !!selfClosing;
+
+		    // process the tag
+		    parser.sawRoot = true;
+		    parser.tags.push(parser.tag);
+		    emitNode(parser, 'onopentag', parser.tag);
+		    if (!selfClosing) {
+		      // special case for <script> in non-strict mode.
+		      if (!parser.noscript && parser.tagName.toLowerCase() === 'script') {
+		        parser.state = S.SCRIPT;
+		      } else {
+		        parser.state = S.TEXT;
+		      }
+		      parser.tag = null;
+		      parser.tagName = '';
+		    }
+		    parser.attribName = parser.attribValue = '';
+		    parser.attribList.length = 0;
+		  }
+
+		  function closeTag(parser) {
+		    if (!parser.tagName) {
+		      strictFail(parser, 'Weird empty close tag.');
+		      parser.textNode += '</>';
+		      parser.state = S.TEXT;
+		      return
+		    }
+
+		    if (parser.script) {
+		      if (parser.tagName !== 'script') {
+		        parser.script += '</' + parser.tagName + '>';
+		        parser.tagName = '';
+		        parser.state = S.SCRIPT;
+		        return
+		      }
+		      emitNode(parser, 'onscript', parser.script);
+		      parser.script = '';
+		    }
+
+		    // first make sure that the closing tag actually exists.
+		    // <a><b></c></b></a> will close everything, otherwise.
+		    var t = parser.tags.length;
+		    var tagName = parser.tagName;
+		    if (!parser.strict) {
+		      tagName = tagName[parser.looseCase]();
+		    }
+		    var closeTo = tagName;
+		    while (t--) {
+		      var close = parser.tags[t];
+		      if (close.name !== closeTo) {
+		        // fail the first time in strict mode
+		        strictFail(parser, 'Unexpected close tag');
+		      } else {
+		        break
+		      }
+		    }
+
+		    // didn't find it.  we already failed for strict, so just abort.
+		    if (t < 0) {
+		      strictFail(parser, 'Unmatched closing tag: ' + parser.tagName);
+		      parser.textNode += '</' + parser.tagName + '>';
+		      parser.state = S.TEXT;
+		      return
+		    }
+		    parser.tagName = tagName;
+		    var s = parser.tags.length;
+		    while (s-- > t) {
+		      var tag = (parser.tag = parser.tags.pop());
+		      parser.tagName = parser.tag.name;
+		      emitNode(parser, 'onclosetag', parser.tagName);
+
+		      var x = {};
+		      for (var i in tag.ns) {
+		        x[i] = tag.ns[i];
+		      }
+
+		      var parent = parser.tags[parser.tags.length - 1] || parser;
+		      if (parser.opt.xmlns && tag.ns !== parent.ns) {
+		        // remove namespace bindings introduced by tag
+		        Object.keys(tag.ns).forEach(function (p) {
+		          var n = tag.ns[p];
+		          emitNode(parser, 'onclosenamespace', { prefix: p, uri: n });
+		        });
+		      }
+		    }
+		    if (t === 0) parser.closedRoot = true;
+		    parser.tagName = parser.attribValue = parser.attribName = '';
+		    parser.attribList.length = 0;
+		    parser.state = S.TEXT;
+		  }
+
+		  function parseEntity(parser) {
+		    var entity = parser.entity;
+		    var entityLC = entity.toLowerCase();
+		    var num;
+		    var numStr = '';
+
+		    if (parser.ENTITIES[entity]) {
+		      return parser.ENTITIES[entity]
+		    }
+		    if (parser.ENTITIES[entityLC]) {
+		      return parser.ENTITIES[entityLC]
+		    }
+		    entity = entityLC;
+		    if (entity.charAt(0) === '#') {
+		      if (entity.charAt(1) === 'x') {
+		        entity = entity.slice(2);
+		        num = parseInt(entity, 16);
+		        numStr = num.toString(16);
+		      } else {
+		        entity = entity.slice(1);
+		        num = parseInt(entity, 10);
+		        numStr = num.toString(10);
+		      }
+		    }
+		    entity = entity.replace(/^0+/, '');
+		    if (
+		      isNaN(num) ||
+		      numStr.toLowerCase() !== entity ||
+		      num < 0 ||
+		      num > 0x10ffff ||
+		      !isXmlChar(num)
+		    ) {
+		      strictFail(parser, 'Invalid character entity');
+		      return '&' + parser.entity + ';'
+		    }
+
+		    return String.fromCodePoint(num)
+		  }
+
+		  // Returns true if `num` is a code point that matches the XML `Char`
+		  // production, false otherwise. Character references that resolve to a
+		  // character outside this range (e.g. surrogates or restricted control
+		  // characters) are not well-formed.
+		  // https://www.w3.org/TR/REC-xml/#NT-Char
+		  // https://www.w3.org/TR/REC-xml/#wf-Legalchar
+		  function isXmlChar(num) {
+		    return (
+		      num === 0x9 ||
+		      num === 0xa ||
+		      num === 0xd ||
+		      (num >= 0x20 && num <= 0xd7ff) ||
+		      (num >= 0xe000 && num <= 0xfffd) ||
+		      (num >= 0x10000 && num <= 0x10ffff)
+		    )
+		  }
+
+		  function beginWhiteSpace(parser, c) {
+		    if (c === '<') {
+		      parser.state = S.OPEN_WAKA;
+		      parser.startTagPosition = parser.position;
+		    } else if (!isWhitespace(c)) {
+		      // have to process this as a text node.
+		      // weird, but happens.
+		      strictFail(parser, 'Non-whitespace before first tag.');
+		      parser.textNode = c;
+		      parser.state = S.TEXT;
+		    }
+		  }
+
+		  function charAt(chunk, i) {
+		    var result = '';
+		    if (i < chunk.length) {
+		      result = chunk.charAt(i);
+		    }
+		    return result
+		  }
+
+		  function write(chunk) {
+		    var parser = this;
+		    if (this.error) {
+		      throw this.error
+		    }
+		    if (parser.closed) {
+		      return error(
+		        parser,
+		        'Cannot write after close. Assign an onready handler.'
+		      )
+		    }
+		    if (chunk === null) {
+		      return end(parser)
+		    }
+		    if (typeof chunk === 'object') {
+		      chunk = chunk.toString();
+		    }
+		    var i = 0;
+		    var c = '';
+		    while (true) {
+		      c = charAt(chunk, i++);
+		      parser.c = c;
+
+		      if (!c) {
+		        break
+		      }
+
+		      if (parser.trackPosition) {
+		        parser.position++;
+		        if (c === '\n') {
+		          parser.line++;
+		          parser.column = 0;
+		        } else {
+		          parser.column++;
+		        }
+		      }
+
+		      switch (parser.state) {
+		        case S.BEGIN:
+		          parser.state = S.BEGIN_WHITESPACE;
+		          if (c === '\uFEFF') {
+		            continue
+		          }
+		          beginWhiteSpace(parser, c);
+		          continue
+
+		        case S.BEGIN_WHITESPACE:
+		          beginWhiteSpace(parser, c);
+		          continue
+
+		        case S.TEXT:
+		          if (parser.sawRoot && !parser.closedRoot) {
+		            var starti = i - 1;
+		            while (c && c !== '<' && c !== '&') {
+		              c = charAt(chunk, i++);
+		              if (c && parser.trackPosition) {
+		                parser.position++;
+		                if (c === '\n') {
+		                  parser.line++;
+		                  parser.column = 0;
+		                } else {
+		                  parser.column++;
+		                }
+		              }
+		            }
+		            parser.textNode += chunk.substring(starti, i - 1);
+		          }
+		          if (
+		            c === '<' &&
+		            !(parser.sawRoot && parser.closedRoot && !parser.strict)
+		          ) {
+		            parser.state = S.OPEN_WAKA;
+		            parser.startTagPosition = parser.position;
+		          } else {
+		            if (
+		              !isWhitespace(c) &&
+		              (!parser.sawRoot || parser.closedRoot)
+		            ) {
+		              strictFail(parser, 'Text data outside of root node.');
+		            }
+		            if (c === '&') {
+		              parser.state = S.TEXT_ENTITY;
+		            } else {
+		              parser.textNode += c;
+		            }
+		          }
+		          continue
+
+		        case S.SCRIPT:
+		          // only non-strict
+		          if (c === '<') {
+		            parser.state = S.SCRIPT_ENDING;
+		          } else {
+		            parser.script += c;
+		          }
+		          continue
+
+		        case S.SCRIPT_ENDING:
+		          if (c === '/') {
+		            parser.state = S.CLOSE_TAG;
+		          } else {
+		            parser.script += '<' + c;
+		            parser.state = S.SCRIPT;
+		          }
+		          continue
+
+		        case S.OPEN_WAKA:
+		          // either a /, ?, !, or text is coming next.
+		          if (c === '!') {
+		            parser.state = S.SGML_DECL;
+		            parser.sgmlDecl = '';
+		          } else if (isWhitespace(c)) ; else if (isMatch(nameStart, c)) {
+		            parser.state = S.OPEN_TAG;
+		            parser.tagName = c;
+		          } else if (c === '/') {
+		            parser.state = S.CLOSE_TAG;
+		            parser.tagName = '';
+		          } else if (c === '?') {
+		            parser.state = S.PROC_INST;
+		            parser.procInstName = parser.procInstBody = '';
+		          } else {
+		            strictFail(parser, 'Unencoded <');
+		            // if there was some whitespace, then add that in.
+		            if (parser.startTagPosition + 1 < parser.position) {
+		              var pad = parser.position - parser.startTagPosition;
+		              c = new Array(pad).join(' ') + c;
+		            }
+		            parser.textNode += '<' + c;
+		            parser.state = S.TEXT;
+		          }
+		          continue
+
+		        case S.SGML_DECL:
+		          if (parser.sgmlDecl + c === '--') {
+		            parser.state = S.COMMENT;
+		            parser.comment = '';
+		            parser.sgmlDecl = '';
+		            continue
+		          }
+
+		          if (
+		            parser.doctype &&
+		            parser.doctype !== true &&
+		            parser.sgmlDecl
+		          ) {
+		            parser.state = S.DOCTYPE_DTD;
+		            parser.doctype += '<!' + parser.sgmlDecl + c;
+		            parser.sgmlDecl = '';
+		          } else if (CDATAre.test(parser.sgmlDecl + c)) {
+		            emitNode(parser, 'onopencdata');
+		            parser.state = S.CDATA;
+		            parser.sgmlDecl = '';
+		            parser.cdata = '';
+		          } else if (DOCTYPEre.test(parser.sgmlDecl + c)) {
+		            parser.state = S.DOCTYPE;
+		            if (parser.doctype || parser.sawRoot) {
+		              strictFail(
+		                parser,
+		                'Inappropriately located doctype declaration'
+		              );
+		            }
+		            parser.doctype = '';
+		            parser.sgmlDecl = '';
+		          } else if (c === '>') {
+		            emitNode(parser, 'onsgmldeclaration', parser.sgmlDecl);
+		            parser.sgmlDecl = '';
+		            parser.state = S.TEXT;
+		          } else if (isQuote(c)) {
+		            parser.state = S.SGML_DECL_QUOTED;
+		            parser.sgmlDecl += c;
+		          } else {
+		            parser.sgmlDecl += c;
+		          }
+		          continue
+
+		        case S.SGML_DECL_QUOTED:
+		          if (c === parser.q) {
+		            parser.state = S.SGML_DECL;
+		            parser.q = '';
+		          }
+		          parser.sgmlDecl += c;
+		          continue
+
+		        case S.DOCTYPE:
+		          if (c === '>') {
+		            parser.state = S.TEXT;
+		            emitNode(parser, 'ondoctype', parser.doctype);
+		            parser.doctype = true; // just remember that we saw it.
+		          } else {
+		            parser.doctype += c;
+		            if (c === '[') {
+		              parser.state = S.DOCTYPE_DTD;
+		            } else if (isQuote(c)) {
+		              parser.state = S.DOCTYPE_QUOTED;
+		              parser.q = c;
+		            }
+		          }
+		          continue
+
+		        case S.DOCTYPE_QUOTED:
+		          parser.doctype += c;
+		          if (c === parser.q) {
+		            parser.q = '';
+		            parser.state = S.DOCTYPE;
+		          }
+		          continue
+
+		        case S.DOCTYPE_DTD:
+		          if (c === ']') {
+		            parser.doctype += c;
+		            parser.state = S.DOCTYPE;
+		          } else if (c === '<') {
+		            parser.state = S.OPEN_WAKA;
+		            parser.startTagPosition = parser.position;
+		          } else if (isQuote(c)) {
+		            parser.doctype += c;
+		            parser.state = S.DOCTYPE_DTD_QUOTED;
+		            parser.q = c;
+		          } else {
+		            parser.doctype += c;
+		          }
+		          continue
+
+		        case S.DOCTYPE_DTD_QUOTED:
+		          parser.doctype += c;
+		          if (c === parser.q) {
+		            parser.state = S.DOCTYPE_DTD;
+		            parser.q = '';
+		          }
+		          continue
+
+		        case S.COMMENT:
+		          if (c === '-') {
+		            parser.state = S.COMMENT_ENDING;
+		          } else {
+		            parser.comment += c;
+		          }
+		          continue
+
+		        case S.COMMENT_ENDING:
+		          if (c === '-') {
+		            parser.state = S.COMMENT_ENDED;
+		            parser.comment = textopts(parser.opt, parser.comment);
+		            if (parser.comment) {
+		              emitNode(parser, 'oncomment', parser.comment);
+		            }
+		            parser.comment = '';
+		          } else {
+		            parser.comment += '-' + c;
+		            parser.state = S.COMMENT;
+		          }
+		          continue
+
+		        case S.COMMENT_ENDED:
+		          if (c !== '>') {
+		            strictFail(parser, 'Malformed comment');
+		            // allow <!-- blah -- bloo --> in non-strict mode,
+		            // which is a comment of " blah -- bloo "
+		            parser.comment += '--' + c;
+		            parser.state = S.COMMENT;
+		          } else if (parser.doctype && parser.doctype !== true) {
+		            parser.state = S.DOCTYPE_DTD;
+		          } else {
+		            parser.state = S.TEXT;
+		          }
+		          continue
+
+		        case S.CDATA:
+		          var starti = i - 1;
+		          while (c && c !== ']') {
+		            c = charAt(chunk, i++);
+		            if (c && parser.trackPosition) {
+		              parser.position++;
+		              if (c === '\n') {
+		                parser.line++;
+		                parser.column = 0;
+		              } else {
+		                parser.column++;
+		              }
+		            }
+		          }
+		          parser.cdata += chunk.substring(starti, i - 1);
+		          if (c === ']') {
+		            parser.state = S.CDATA_ENDING;
+		          }
+		          continue
+
+		        case S.CDATA_ENDING:
+		          if (c === ']') {
+		            parser.state = S.CDATA_ENDING_2;
+		          } else {
+		            parser.cdata += ']' + c;
+		            parser.state = S.CDATA;
+		          }
+		          continue
+
+		        case S.CDATA_ENDING_2:
+		          if (c === '>') {
+		            if (parser.cdata) {
+		              emitNode(parser, 'oncdata', parser.cdata);
+		            }
+		            emitNode(parser, 'onclosecdata');
+		            parser.cdata = '';
+		            parser.state = S.TEXT;
+		          } else if (c === ']') {
+		            parser.cdata += ']';
+		          } else {
+		            parser.cdata += ']]' + c;
+		            parser.state = S.CDATA;
+		          }
+		          continue
+
+		        case S.PROC_INST:
+		          if (c === '?') {
+		            parser.state = S.PROC_INST_ENDING;
+		          } else if (isWhitespace(c)) {
+		            parser.state = S.PROC_INST_BODY;
+		          } else {
+		            parser.procInstName += c;
+		          }
+		          continue
+
+		        case S.PROC_INST_BODY:
+		          if (!parser.procInstBody && isWhitespace(c)) {
+		            continue
+		          } else if (c === '?') {
+		            parser.state = S.PROC_INST_ENDING;
+		          } else {
+		            parser.procInstBody += c;
+		          }
+		          continue
+
+		        case S.PROC_INST_ENDING:
+		          if (c === '>') {
+		            const procInstEndData = {
+		              name: parser.procInstName,
+		              body: parser.procInstBody,
+		            };
+		            validateXmlDeclarationEncoding(parser, procInstEndData);
+		            emitNode(parser, 'onprocessinginstruction', procInstEndData);
+		            parser.procInstName = parser.procInstBody = '';
+		            parser.state = S.TEXT;
+		          } else {
+		            parser.procInstBody += '?' + c;
+		            parser.state = S.PROC_INST_BODY;
+		          }
+		          continue
+
+		        case S.OPEN_TAG:
+		          if (isMatch(nameBody, c)) {
+		            parser.tagName += c;
+		          } else {
+		            newTag(parser);
+		            if (c === '>') {
+		              openTag(parser);
+		            } else if (c === '/') {
+		              parser.state = S.OPEN_TAG_SLASH;
+		            } else {
+		              if (!isWhitespace(c)) {
+		                strictFail(parser, 'Invalid character in tag name');
+		              }
+		              parser.state = S.ATTRIB;
+		            }
+		          }
+		          continue
+
+		        case S.OPEN_TAG_SLASH:
+		          if (c === '>') {
+		            openTag(parser, true);
+		            closeTag(parser);
+		          } else {
+		            strictFail(
+		              parser,
+		              'Forward-slash in opening tag not followed by >'
+		            );
+		            parser.state = S.ATTRIB;
+		          }
+		          continue
+
+		        case S.ATTRIB:
+		          // haven't read the attribute name yet.
+		          if (isWhitespace(c)) {
+		            continue
+		          } else if (c === '>') {
+		            openTag(parser);
+		          } else if (c === '/') {
+		            parser.state = S.OPEN_TAG_SLASH;
+		          } else if (isMatch(nameStart, c)) {
+		            parser.attribName = c;
+		            parser.attribValue = '';
+		            parser.state = S.ATTRIB_NAME;
+		          } else {
+		            strictFail(parser, 'Invalid attribute name');
+		          }
+		          continue
+
+		        case S.ATTRIB_NAME:
+		          if (c === '=') {
+		            parser.state = S.ATTRIB_VALUE;
+		          } else if (c === '>') {
+		            strictFail(parser, 'Attribute without value');
+		            parser.attribValue = parser.attribName;
+		            attrib(parser);
+		            openTag(parser);
+		          } else if (isWhitespace(c)) {
+		            parser.state = S.ATTRIB_NAME_SAW_WHITE;
+		          } else if (isMatch(nameBody, c)) {
+		            parser.attribName += c;
+		          } else {
+		            strictFail(parser, 'Invalid attribute name');
+		          }
+		          continue
+
+		        case S.ATTRIB_NAME_SAW_WHITE:
+		          if (c === '=') {
+		            parser.state = S.ATTRIB_VALUE;
+		          } else if (isWhitespace(c)) {
+		            continue
+		          } else {
+		            strictFail(parser, 'Attribute without value');
+		            parser.tag.attributes[parser.attribName] = '';
+		            parser.attribValue = '';
+		            emitNode(parser, 'onattribute', {
+		              name: parser.attribName,
+		              value: '',
+		            });
+		            parser.attribName = '';
+		            if (c === '>') {
+		              openTag(parser);
+		            } else if (isMatch(nameStart, c)) {
+		              parser.attribName = c;
+		              parser.state = S.ATTRIB_NAME;
+		            } else {
+		              strictFail(parser, 'Invalid attribute name');
+		              parser.state = S.ATTRIB;
+		            }
+		          }
+		          continue
+
+		        case S.ATTRIB_VALUE:
+		          if (isWhitespace(c)) {
+		            continue
+		          } else if (isQuote(c)) {
+		            parser.q = c;
+		            parser.state = S.ATTRIB_VALUE_QUOTED;
+		          } else {
+		            if (!parser.opt.unquotedAttributeValues) {
+		              error(parser, 'Unquoted attribute value');
+		            }
+		            parser.state = S.ATTRIB_VALUE_UNQUOTED;
+		            parser.attribValue = c;
+		          }
+		          continue
+
+		        case S.ATTRIB_VALUE_QUOTED:
+		          if (c !== parser.q) {
+		            if (c === '&') {
+		              parser.state = S.ATTRIB_VALUE_ENTITY_Q;
+		            } else {
+		              parser.attribValue += c;
+		            }
+		            continue
+		          }
+		          attrib(parser);
+		          parser.q = '';
+		          parser.state = S.ATTRIB_VALUE_CLOSED;
+		          continue
+
+		        case S.ATTRIB_VALUE_CLOSED:
+		          if (isWhitespace(c)) {
+		            parser.state = S.ATTRIB;
+		          } else if (c === '>') {
+		            openTag(parser);
+		          } else if (c === '/') {
+		            parser.state = S.OPEN_TAG_SLASH;
+		          } else if (isMatch(nameStart, c)) {
+		            strictFail(parser, 'No whitespace between attributes');
+		            parser.attribName = c;
+		            parser.attribValue = '';
+		            parser.state = S.ATTRIB_NAME;
+		          } else {
+		            strictFail(parser, 'Invalid attribute name');
+		          }
+		          continue
+
+		        case S.ATTRIB_VALUE_UNQUOTED:
+		          if (!isAttribEnd(c)) {
+		            if (c === '&') {
+		              parser.state = S.ATTRIB_VALUE_ENTITY_U;
+		            } else {
+		              parser.attribValue += c;
+		            }
+		            continue
+		          }
+		          attrib(parser);
+		          if (c === '>') {
+		            openTag(parser);
+		          } else {
+		            parser.state = S.ATTRIB;
+		          }
+		          continue
+
+		        case S.CLOSE_TAG:
+		          if (!parser.tagName) {
+		            if (isWhitespace(c)) {
+		              continue
+		            } else if (notMatch(nameStart, c)) {
+		              if (parser.script) {
+		                parser.script += '</' + c;
+		                parser.state = S.SCRIPT;
+		              } else {
+		                strictFail(parser, 'Invalid tagname in closing tag.');
+		              }
+		            } else {
+		              parser.tagName = c;
+		            }
+		          } else if (c === '>') {
+		            closeTag(parser);
+		          } else if (isMatch(nameBody, c)) {
+		            parser.tagName += c;
+		          } else if (parser.script) {
+		            parser.script += '</' + parser.tagName + c;
+		            parser.tagName = '';
+		            parser.state = S.SCRIPT;
+		          } else {
+		            if (!isWhitespace(c)) {
+		              strictFail(parser, 'Invalid tagname in closing tag');
+		            }
+		            parser.state = S.CLOSE_TAG_SAW_WHITE;
+		          }
+		          continue
+
+		        case S.CLOSE_TAG_SAW_WHITE:
+		          if (isWhitespace(c)) {
+		            continue
+		          }
+		          if (c === '>') {
+		            closeTag(parser);
+		          } else {
+		            strictFail(parser, 'Invalid characters in closing tag');
+		          }
+		          continue
+
+		        case S.TEXT_ENTITY:
+		        case S.ATTRIB_VALUE_ENTITY_Q:
+		        case S.ATTRIB_VALUE_ENTITY_U:
+		          var returnState;
+		          var buffer;
+		          switch (parser.state) {
+		            case S.TEXT_ENTITY:
+		              returnState = S.TEXT;
+		              buffer = 'textNode';
+		              break
+
+		            case S.ATTRIB_VALUE_ENTITY_Q:
+		              returnState = S.ATTRIB_VALUE_QUOTED;
+		              buffer = 'attribValue';
+		              break
+
+		            case S.ATTRIB_VALUE_ENTITY_U:
+		              returnState = S.ATTRIB_VALUE_UNQUOTED;
+		              buffer = 'attribValue';
+		              break
+		          }
+
+		          if (c === ';') {
+		            var parsedEntity = parseEntity(parser);
+		            if (
+		              parser.opt.unparsedEntities &&
+		              !Object.values(sax.XML_ENTITIES).includes(parsedEntity)
+		            ) {
+		              if ((parser.entityCount += 1) > parser.opt.maxEntityCount) {
+		                error(
+		                  parser,
+		                  'Parsed entity count exceeds max entity count'
+		                );
+		              }
+
+		              if ((parser.entityDepth += 1) > parser.opt.maxEntityDepth) {
+		                error(
+		                  parser,
+		                  'Parsed entity depth exceeds max entity depth'
+		                );
+		              }
+
+		              parser.entity = '';
+		              parser.state = returnState;
+		              parser.write(parsedEntity);
+		              parser.entityDepth -= 1;
+		            } else {
+		              parser[buffer] += parsedEntity;
+		              parser.entity = '';
+		              parser.state = returnState;
+		            }
+		          } else if (
+		            isMatch(parser.entity.length ? entityBody : entityStart, c)
+		          ) {
+		            parser.entity += c;
+		          } else {
+		            strictFail(parser, 'Invalid character in entity name');
+		            parser[buffer] += '&' + parser.entity + c;
+		            parser.entity = '';
+		            parser.state = returnState;
+		          }
+
+		          continue
+
+		        default: /* istanbul ignore next */ {
+		          throw new Error(parser, 'Unknown state: ' + parser.state)
+		        }
+		      }
+		    } // while
+
+		    if (parser.position >= parser.bufferCheckPosition) {
+		      checkBufferLength(parser);
+		    }
+		    return parser
+		  }
+
+		  /*! http://mths.be/fromcodepoint v0.1.0 by @mathias */
+		  /* istanbul ignore next */
+		  if (!String.fromCodePoint) {
+(function () {
+		      var stringFromCharCode = String.fromCharCode;
+		      var floor = Math.floor;
+		      var fromCodePoint = function () {
+		        var MAX_SIZE = 0x4000;
+		        var codeUnits = [];
+		        var highSurrogate;
+		        var lowSurrogate;
+		        var index = -1;
+		        var length = arguments.length;
+		        if (!length) {
+		          return ''
+		        }
+		        var result = '';
+		        while (++index < length) {
+		          var codePoint = Number(arguments[index]);
+		          if (
+		            !isFinite(codePoint) || // `NaN`, `+Infinity`, or `-Infinity`
+		            codePoint < 0 || // not a valid Unicode code point
+		            codePoint > 0x10ffff || // not a valid Unicode code point
+		            floor(codePoint) !== codePoint // not an integer
+		          ) {
+		            throw RangeError('Invalid code point: ' + codePoint)
+		          }
+		          if (codePoint <= 0xffff) {
+		            // BMP code point
+		            codeUnits.push(codePoint);
+		          } else {
+		            // Astral code point; split in surrogate halves
+		            // http://mathiasbynens.be/notes/javascript-encoding#surrogate-formulae
+		            codePoint -= 0x10000;
+		            highSurrogate = (codePoint >> 10) + 0xd800;
+		            lowSurrogate = (codePoint % 0x400) + 0xdc00;
+		            codeUnits.push(highSurrogate, lowSurrogate);
+		          }
+		          if (index + 1 === length || codeUnits.length > MAX_SIZE) {
+		            result += stringFromCharCode.apply(null, codeUnits);
+		            codeUnits.length = 0;
+		          }
+		        }
+		        return result
+		      };
+		      /* istanbul ignore next */
+		      if (Object.defineProperty) {
+		        Object.defineProperty(String, 'fromCodePoint', {
+		          value: fromCodePoint,
+		          configurable: true,
+		          writable: true,
+		        });
+		      } else {
+		        String.fromCodePoint = fromCodePoint;
+		      }
+		    })();
+		  }
+		})(exports); 
+	} (sax$1));
+	return sax$1;
+}
+
+var saxExports = requireSax();
+var sax = /*@__PURE__*/getDefaultExportFromCjs(saxExports);
+
+/**
+ * Reads JUnit XML reports. "JUnit XML" is not one standard: Vitest, Pester,
+ * pytest, Playwright and Maven Surefire each write their own variant. This
+ * reader turns any of them into a flat list of test cases, so the rest of the
+ * action never sees the differences:
+ *
+ * - The root can be <testsuites> or a single <testsuite>, and suites can be
+ *   nested at any depth. The reader walks the whole tree.
+ * - The summary attributes (tests="12" failures="1") are ignored, because
+ *   some tools write totals that do not match the cases. The cases are counted.
+ * - A case's result comes from its child elements: <failure>, <error> and
+ *   <skipped>. Surefire's <flakyFailure> and <flakyError> mean the test passed
+ *   on a retry: it counts as passed and is marked flaky.
+ *
+ * The XML is parsed with sax in strict mode, which never expands entities
+ * declared in a DOCTYPE and never loads external ones. A report is input that
+ * the action does not fully control, and both are classic attacks: a few
+ * nested entities that expand to gigabytes ("billion laughs"), and an entity
+ * that reads a file from the machine (XXE).
+ */
+/** A report that cannot be read. Line and column start at 1 when known. */
+class ReportError extends Error {
+    file;
+    reason;
+    line;
+    column;
+    constructor(file, reason, line, column) {
+        const at = line === undefined ? "" : `:${String(line)}:${String(column ?? 1)}`;
+        super(`${file}${at}: ${reason}`);
+        this.file = file;
+        this.reason = reason;
+        this.line = line;
+        this.column = column;
+        this.name = "ReportError";
+    }
+}
+/** What a child element of a <testcase> says about its result. */
+const RESULT_ELEMENTS = {
+    failure: "failed",
+    error: "error",
+    skipped: "skipped",
+};
+const FLAKY_ELEMENTS = new Set(["flakyFailure", "flakyError"]);
+/** Within one case, the most serious result wins. */
+const SEVERITY = { passed: 0, skipped: 1, failed: 2, error: 3 };
+const ROOTS = new Set(["testsuites", "testsuite"]);
+function parseJUnitReport(text, file) {
+    // A byte order mark is not XML: sax would reject it as text before the root.
+    const source = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+    if (source.trim() === "") {
+        throw new ReportError(file, "the file is empty");
+    }
+    const parser = sax.parser(true, { position: true });
+    const where = () => ({ line: parser.line + 1, column: parser.column });
+    const fail = (reason) => {
+        const { line, column } = where();
+        throw new ReportError(file, reason, line, column);
+    };
+    const cases = [];
+    const suites = [];
+    const open = [];
+    let current;
+    // Set by the callbacks below. Without "as boolean", TypeScript assumes it
+    // is still false after parsing, because it cannot see the callbacks run.
+    let sawRoot = false;
+    parser.onerror = (error) => {
+        fail(describeXmlError(error.message));
+    };
+    parser.onopentag = (tag) => {
+        const parent = open.at(-1);
+        open.push(tag.name);
+        if (!sawRoot) {
+            sawRoot = true;
+            if (!ROOTS.has(tag.name))
+                fail(notJUnit(tag.name));
+        }
+        if (tag.name === "testsuite") {
+            suites.push(attribute(tag, "name"));
+        }
+        else if (tag.name === "testcase") {
+            if (current !== undefined)
+                fail("a <testcase> inside another <testcase>");
+            current = {
+                file,
+                suite: suites.at(-1) ?? "",
+                classname: attribute(tag, "classname"),
+                name: attribute(tag, "name"),
+                status: "passed",
+                flaky: false,
+            };
+        }
+        else if (current !== undefined && parent === "testcase") {
+            const status = RESULT_ELEMENTS[tag.name];
+            if (status !== undefined && SEVERITY[status] > SEVERITY[current.status]) {
+                current.status = status;
+            }
+            if (FLAKY_ELEMENTS.has(tag.name))
+                current.flaky = true;
+        }
+    };
+    parser.onclosetag = (name) => {
+        open.pop();
+        if (name === "testsuite") {
+            suites.pop();
+        }
+        else if (name === "testcase" && current !== undefined) {
+            cases.push(current);
+            current = undefined;
+        }
+    };
+    parser.write(source).close();
+    if (!sawRoot)
+        throw new ReportError(file, "there is no XML element in the file");
+    return cases;
+}
+/** An attribute's value, or "" when the element does not have it. */
+function attribute(tag, name) {
+    const value = tag.attributes[name];
+    return typeof value === "string" ? value : (value?.value ?? "");
+}
+/** sax's message without its position lines, with a hint for the safety refusal. */
+function describeXmlError(message) {
+    const reason = message.split("\n")[0] ?? message;
+    if (reason === "Invalid character entity") {
+        return ("invalid XML: it uses an entity that XML does not define. Entities declared in a " +
+            "DOCTYPE are never expanded, for safety");
+    }
+    return `invalid XML: ${reason}`;
+}
+function notJUnit(root) {
+    const reason = `not a JUnit report: the root element is <${root}>, not <testsuites> or <testsuite>`;
+    // Pester writes NUnit XML (<test-results>) unless it is told otherwise.
+    return root === "test-results" || root === "test-run"
+        ? `${reason}. It looks like NUnit XML; in Pester, set TestResult.OutputFormat to JUnitXml`
+        : reason;
+}
+
+/**
  * The action's logic, kept apart from the GitHub Actions toolkit so it can be
  * tested with a fake runner: index.ts passes the real one.
  *
- * For now it reads and checks the catalog. Reading test results and drawing
- * the badges come in the next versions.
+ * It reads the catalog and the JUnit reports, decides which items are done and
+ * reports the progress of each area. Drawing the badges comes next.
  */
 const DEFAULT_CATALOG = "progress.yml";
+const HEADING = "### Roadmap Badges\n\n";
 async function run(runner) {
     try {
         const path = runner.getInput("catalog").trim() || DEFAULT_CATALOG;
-        const text = runner.readFile(path);
-        if (text === undefined) {
-            runner.setFailed(`roadmap-badges: no catalog at ${path}. Create it, or set the "catalog" input to its path.`);
-            await runner.addSummary(`${HEADING}No catalog at ${codeSpan(path)}.\n`);
+        const strict = booleanInput(runner, "strict");
+        const patterns = runner
+            .getInput("reports")
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line !== "");
+        const catalog = await readCatalog(runner, path);
+        if (catalog === undefined)
+            return;
+        if (patterns.length === 0 && needsReports(catalog)) {
+            const message = "roadmap-badges: the catalog has items proved by tests, but no reports were given. " +
+                'Set the "reports" input to the JUnit XML files that your tests write.';
+            runner.setFailed(message);
+            await runner.addSummary(`${HEADING}${message.replace("roadmap-badges: t", "T")}\n`);
             return;
         }
-        const result = parseCatalog(text);
-        if (!result.ok) {
-            const lines = result.errors.map((error) => formatError(path, error));
-            result.errors.forEach((error, index) => {
-                runner.error(lines[index] ?? error.message, {
-                    file: path,
-                    line: error.line,
-                    column: error.column,
-                });
-            });
-            const count = plural(result.errors.length, "problem");
-            runner.setFailed(`roadmap-badges: the catalog at ${path} has ${count}.`);
-            await runner.addSummary(`${HEADING}The catalog at ${codeSpan(path)} has ${count}:\n\n` +
-                lines.map((line) => `- ${codeSpan(line)}`).join("\n") +
-                "\n");
+        const reports = await readReports(runner, patterns);
+        if (reports === undefined)
             return;
+        const result = evaluate(catalog, reports.cases);
+        for (const { tag, tests } of result.orphans) {
+            const message = orphanMessage(tag, tests);
+            if (strict)
+                runner.error(message);
+            else
+                runner.warning(message);
         }
-        const counts = countItems(result.catalog);
-        runner.info(`roadmap-badges: read ${path} for ${result.catalog.project}: ` +
-            `${plural(counts.areas, "area")}, ${plural(counts.items, "item")}` +
-            (counts.dropped > 0 ? ` and ${String(counts.dropped)} dropped.` : "."));
-        runner.setOutput("areas", String(counts.areas));
-        runner.setOutput("items", String(counts.items));
-        runner.setOutput("dropped", String(counts.dropped));
-        await runner.addSummary(summary(path, result.catalog));
+        if (patterns.length > 0) {
+            runner.info(`roadmap-badges: read ${plural(result.tests.length, "test")} from ` +
+                `${plural(reports.files, "report")}.`);
+        }
+        runner.info(`roadmap-badges: ${progressText(result)}.`);
+        runner.setOutput("done", String(result.done));
+        runner.setOutput("percent", result.percent === null ? "" : String(result.percent));
+        await runner.addSummary(summary(path, catalog, result, reports.files));
+        if (strict && result.orphans.length > 0) {
+            runner.setFailed(`roadmap-badges: ${plural(result.orphans.length, "tag")} in test names ` +
+                `${result.orphans.length === 1 ? "matches" : "match"} no item, and "strict" is on.`);
+        }
     }
     catch (error) {
         runner.setFailed(error instanceof Error ? error.message : String(error));
     }
+}
+/** Reads and checks the catalog. On a problem it fails the step and returns undefined. */
+async function readCatalog(runner, path) {
+    const text = runner.readFile(path);
+    if (text === undefined) {
+        runner.setFailed(`roadmap-badges: no catalog at ${path}. Create it, or set the "catalog" input to its path.`);
+        await runner.addSummary(`${HEADING}No catalog at ${codeSpan(path)}.\n`);
+        return undefined;
+    }
+    const result = parseCatalog(text);
+    if (!result.ok) {
+        const lines = result.errors.map((error) => formatError(path, error));
+        result.errors.forEach((error, index) => {
+            runner.error(lines[index] ?? error.message, {
+                file: path,
+                line: error.line,
+                column: error.column,
+            });
+        });
+        const count = plural(result.errors.length, "problem");
+        runner.setFailed(`roadmap-badges: the catalog at ${path} has ${count}.`);
+        await runner.addSummary(`${HEADING}The catalog at ${codeSpan(path)} has ${count}:\n\n` +
+            lines.map((line) => `- ${codeSpan(line)}`).join("\n") +
+            "\n");
+        return undefined;
+    }
+    const counts = countItems(result.catalog);
+    runner.info(`roadmap-badges: read ${path} for ${result.catalog.project}: ` +
+        `${plural(counts.areas, "area")}, ${plural(counts.items, "item")}` +
+        (counts.dropped > 0 ? ` and ${String(counts.dropped)} dropped.` : "."));
+    runner.setOutput("areas", String(counts.areas));
+    runner.setOutput("items", String(counts.items));
+    runner.setOutput("dropped", String(counts.dropped));
+    return result.catalog;
+}
+/**
+ * Reads every report that the patterns match. A pattern that matches nothing
+ * is an error, not 0 %: a silent 0 % from a mistyped path is worse than a red
+ * build. On a problem it fails the step and returns undefined.
+ */
+async function readReports(runner, patterns) {
+    const problems = [];
+    const problem = (message, location) => {
+        problems.push(message);
+        runner.error(`roadmap-badges: ${message}`, location);
+    };
+    const files = [];
+    for (const pattern of patterns) {
+        const found = runner.findFiles(pattern);
+        if (found.length === 0)
+            problem(`no file matches the reports pattern ${pattern}`);
+        for (const file of found)
+            if (!files.includes(file))
+                files.push(file);
+    }
+    const cases = [];
+    for (const file of files) {
+        const text = runner.readFile(file);
+        if (text === undefined) {
+            problem(`cannot read ${file}`);
+            continue;
+        }
+        try {
+            const read = parseJUnitReport(text, file);
+            if (read.length === 0)
+                runner.warning(`roadmap-badges: ${file} has no test cases.`);
+            cases.push(...read);
+        }
+        catch (error) {
+            if (!(error instanceof ReportError))
+                throw error;
+            const { line, column } = error;
+            problem(error.message, line === undefined ? undefined : { file, line, column: column ?? 1 });
+        }
+    }
+    if (problems.length === 0)
+        return { cases, files: files.length };
+    const count = plural(problems.length, "problem");
+    runner.setFailed(`roadmap-badges: ${count} with the test reports.`);
+    await runner.addSummary(`${HEADING}${count} with the test reports:\n\n` +
+        problems.map((problem) => `- ${codeSpan(problem)}`).join("\n") +
+        "\n");
+    return undefined;
 }
 /** Items that count towards the total, and dropped items, which do not. */
 function countItems(catalog) {
@@ -42176,16 +44419,95 @@ function countItems(catalog) {
     const dropped = all.filter((item) => item.dropped !== undefined).length;
     return { areas: catalog.areas.length, items: all.length - dropped, dropped };
 }
-const HEADING = "### Roadmap Badges\n\n";
-function summary(path, catalog) {
-    const rows = catalog.areas.map((area) => {
-        const dropped = area.items.filter((item) => item.dropped !== undefined).length;
-        return `| ${tableCell(area.title)} | ${String(area.items.length - dropped)} | ${String(dropped)} |`;
-    });
-    return (`${HEADING}Catalog ${codeSpan(path)} for **${tableCell(catalog.project)}**.\n\n` +
-        "| Area | Items | Dropped |\n| --- | ---: | ---: |\n" +
+/** True when some item that counts is proved by tests, so reports are needed. */
+function needsReports(catalog) {
+    return catalog.areas.some((area) => area.items.some((item) => item.evidence === "junit" && item.dropped === undefined));
+}
+/** A true/false input, read like the toolkit's getBooleanInput. Empty means false. */
+function booleanInput(runner, name) {
+    const value = runner.getInput(name).trim();
+    if (["", "false", "False", "FALSE"].includes(value))
+        return false;
+    if (["true", "True", "TRUE"].includes(value))
+        return true;
+    throw new Error(`roadmap-badges: the "${name}" input must be true or false, not "${value}".`);
+}
+function orphanMessage(tag, tests) {
+    const first = tests[0];
+    const where = first === undefined ? "" : ` in "${shorten(first.name)}" (${first.files.join(", ")})`;
+    const more = tests.length > 1 ? ` and ${plural(tests.length - 1, "more test")}` : "";
+    return `roadmap-badges: the tag @${tag}${where}${more} matches no item in the catalog. Is the id misspelt?`;
+}
+function progressText({ done, total, percent }) {
+    return percent === null
+        ? "no items to count"
+        : `${String(done)} of ${plural(total, "item")} done (${String(percent)}%)`;
+}
+function summary(path, catalog, result, reports) {
+    const rows = result.areas.map((area) => `| ${tableCell(area.title)} | ${String(area.done)} | ${String(area.total)} | ` +
+        `${area.percent === null ? "no items" : `${String(area.percent)}%`} | ${String(area.dropped)} |`);
+    const source = reports === 0
+        ? `Catalog ${codeSpan(path)}, no test reports.`
+        : `Catalog ${codeSpan(path)}, ${plural(reports, "JUnit report")} with ${plural(result.tests.length, "test")}.`;
+    let text = `${HEADING}**${tableCell(catalog.project)}**: ${progressText(result)}. ${source}\n\n` +
+        "| Area | Done | Items | Progress | Dropped |\n| --- | ---: | ---: | ---: | ---: |\n" +
         rows.join("\n") +
-        "\n");
+        "\n";
+    const missing = result.areas.flatMap((area) => area.items
+        .filter((item) => item.status !== "done" && item.status !== "dropped")
+        .map((item) => `| \`${item.id}\` ${tableCell(item.title)} | ${tableCell(area.title)} | ${tableCell(why(item))} |`));
+    if (missing.length > 0) {
+        text +=
+            `\n<details><summary>${plural(missing.length, "item")} not done</summary>\n\n` +
+                "| Item | Area | Why |\n| --- | --- | --- |\n" +
+                missing.join("\n") +
+                "\n\n</details>\n";
+    }
+    const notes = [];
+    if (result.orphans.length > 0) {
+        const tags = result.orphans.map(({ tag }) => `\`@${tag}\``).join(", ");
+        notes.push(`Tags that match no item: ${tags}.`);
+    }
+    const repeated = result.tests.filter((test) => test.runs > 1).length;
+    if (repeated > 0) {
+        notes.push(`${plural(repeated, "test")} ${repeated === 1 ? "appears" : "appear"} more than once; ` +
+            "a failure in any run counts, and a pass counts over a skip.");
+    }
+    const flaky = result.tests.filter((test) => test.flaky).length;
+    if (flaky > 0) {
+        notes.push(`${plural(flaky, "test")} passed only after a retry.`);
+    }
+    if (notes.length > 0)
+        text += `\n${notes.map((note) => `- ${note}`).join("\n")}\n`;
+    return text;
+}
+/** Why an item is not done, in a few words. */
+function why(item) {
+    const names = (tests) => {
+        const [first, ...rest] = tests;
+        if (first === undefined)
+            return "";
+        return `"${shorten(first.name)}"${rest.length > 0 ? ` and ${String(rest.length)} more` : ""}`;
+    };
+    switch (item.status) {
+        case "failed":
+            return `failed: ${names(item.tests.filter((test) => test.status === "failed" || test.status === "error"))}`;
+        case "missing-tests":
+            return `not in any report: ${names(item.missing)}`;
+        case "skipped":
+            return `skipped: ${names(item.tests.filter((test) => test.status === "skipped"))}`;
+        case "no-tests":
+            return `no test is tagged @${item.id}`;
+        case "not-done":
+            return "marked as not done";
+        case "done":
+        case "dropped":
+            return "";
+    }
+}
+function shorten(text, max = 80) {
+    const line = text.replace(/\s+/g, " ").trim();
+    return line.length > max ? `${line.slice(0, max - 1)}…` : line;
 }
 function plural(count, word) {
     return `${String(count)} ${word}${count === 1 ? "" : "s"}`;
@@ -42211,17 +44533,26 @@ function tableCell(text) {
  * Entry point that GitHub runs (bundled into dist/index.js): connects run() to
  * the real runner through the GitHub Actions toolkit.
  */
+/** Folders that a pattern such as "reports/**" never searches. */
+const SKIPPED_FOLDERS = new Set(["node_modules", ".git"]);
+/** A location as the toolkit's annotation properties. */
+function annotation(location) {
+    return (location && {
+        file: location.file,
+        startLine: location.line,
+        startColumn: location.column,
+    });
+}
 await run({
     getInput: (name) => getInput(name),
     info: (message) => {
         info(message);
     },
+    warning: (message, location) => {
+        warning(message, annotation(location));
+    },
     error: (message, location) => {
-        error$1(message, location && {
-            file: location.file,
-            startLine: location.line,
-            startColumn: location.column,
-        });
+        error$1(message, annotation(location));
     },
     setOutput: (name, value) => {
         setOutput(name, value);
@@ -42239,6 +44570,9 @@ await run({
             throw error;
         }
     },
+    // Relative to the working directory, which is the repository's root in a
+    // workflow. Sorted, so the reports are always read in the same order.
+    findFiles: (pattern) => globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) }).sort(),
     setFailed: (message) => {
         setFailed(message);
     },

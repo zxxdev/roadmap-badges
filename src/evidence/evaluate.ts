@@ -34,13 +34,7 @@ export interface Test {
  * - dropped: left out of the total, with the reason in the catalog.
  */
 export type ItemStatus =
-  | "done"
-  | "failed"
-  | "missing-tests"
-  | "skipped"
-  | "no-tests"
-  | "not-done"
-  | "dropped";
+  "done" | "failed" | "missing-tests" | "skipped" | "no-tests" | "not-done" | "dropped";
 
 export interface TestSelector {
   name: string;

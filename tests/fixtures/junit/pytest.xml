@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="1" skipped="1" tests="5" time="0.018" timestamp="2026-11-26T15:42:06.435042+00:00" hostname="devbox"><testcase classname="pytest.test_demo" name="test_parse" time="0.000" /><testcase classname="pytest.test_demo" name="test_render" time="0.000"><failure message="AssertionError: assert '&lt;b&gt;draft&lt;/b&gt;' == '&lt;b&gt;final&lt;/b&gt;'&#10;  &#10;  - &lt;b&gt;final&lt;/b&gt;&#10;  + &lt;b&gt;draft&lt;/b&gt;">def test_render():
+&gt;       assert "&lt;b&gt;draft&lt;/b&gt;" == "&lt;b&gt;final&lt;/b&gt;"
+E       AssertionError: assert '&lt;b&gt;draft&lt;/b&gt;' == '&lt;b&gt;final&lt;/b&gt;'
+E         
+E         - &lt;b&gt;final&lt;/b&gt;
+E         + &lt;b&gt;draft&lt;/b&gt;
+
+pytest/test_demo.py:15: AssertionError</failure></testcase><testcase classname="pytest.test_demo" name="test_network" time="0.000"><skipped type="pytest.skip" message="needs a network">pytest/test_demo.py:18: needs a network</skipped></testcase><testcase classname="pytest.test_demo" name="test_param[@pytest.param]" time="0.000" /><testcase classname="pytest.test_demo" name="test_setup" time="0.000"><error message="failed on setup with &quot;ConnectionError: there is no database in the example&quot;">@pytest.fixture
+    def database():
+&gt;       raise ConnectionError("there is no database in the example")
+E       ConnectionError: there is no database in the example
+
+pytest/test_demo.py:30: ConnectionError</error></testcase></testsuite></testsuites>

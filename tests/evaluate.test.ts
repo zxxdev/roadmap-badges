@@ -144,10 +144,7 @@ describe("evaluate: tests that appear more than once @evidence.progress", () => 
 
 describe("evaluate: totals and percentages @evidence.progress", () => {
   it("rounds down, so only a finished area shows 100 %", () => {
-    const result = evaluate(catalog(junit("a"), junit("b"), junit("c")), [
-      test("@a"),
-      test("@b"),
-    ]);
+    const result = evaluate(catalog(junit("a"), junit("b"), junit("c")), [test("@a"), test("@b")]);
     expect(result.areas[0]).toMatchObject({ done: 2, total: 3, percent: 66 });
   });
 
@@ -163,7 +160,10 @@ describe("evaluate: totals and percentages @evidence.progress", () => {
   });
 
   it("gives no percentage for an area with no items, instead of 0 % or 100 %", () => {
-    const result = evaluate({ project: "demo", areas: [{ id: "later", title: "Later", items: [] }] }, []);
+    const result = evaluate(
+      { project: "demo", areas: [{ id: "later", title: "Later", items: [] }] },
+      [],
+    );
 
     expect(result.areas[0]).toMatchObject({ done: 0, total: 0, percent: null });
     expect(result.percent).toBeNull();
@@ -266,7 +266,10 @@ describe("evaluate: linking items to tests @evidence.link", () => {
 
   it("joins the tests found by tag and by selector, once each", () => {
     const item = junit("api.get", { tests: [{ name: "gets a user @api.get" }, { name: "plain" }] });
-    const result = evaluate(catalog(item), [test("gets a user @api.get"), test("plain", "skipped")]);
+    const result = evaluate(catalog(item), [
+      test("gets a user @api.get"),
+      test("plain", "skipped"),
+    ]);
 
     expect(result.areas[0]?.items[0]?.tests.map((linked) => linked.name)).toEqual([
       "gets a user @api.get",
@@ -290,20 +293,22 @@ describe("evaluate: linking items to tests @evidence.link", () => {
   });
 });
 
+// The titles describe each case without quoting it: a title with "@api.get"
+// in it would be read as a tag when this repository computes its own progress.
 describe("findTags @evidence.link", () => {
   it.each([
-    ["gets a user @api.get", ["api.get"]],
-    ["@api.get at the start", ["api.get"]],
-    ["ends a sentence @api.get.", ["api.get"]],
-    ["in brackets (@api.get) and [@api.list]", ["api.get", "api.list"]],
-    ["repeated @api.get and @api.get", ["api.get"]],
-    ["describe > test @api.get-all", ["api.get-all"]],
-    ["mail user@example.com is not a tag", []],
-    ["upper case @API.get is not a tag", []],
-    ["a mixed-case end @api.Get is not a tag", []],
-    ["an underscore @api_get is not a tag", []],
-    ["a lone @ sign", []],
-  ])("finds the tags in %j", (name, tags) => {
+    ["a tag at the end", "gets a user @api.get", ["api.get"]],
+    ["a tag at the start", "@api.get at the start", ["api.get"]],
+    ["a tag before a full stop", "ends a sentence @api.get.", ["api.get"]],
+    ["tags in brackets", "in brackets (@api.get) and [@api.list]", ["api.get", "api.list"]],
+    ["a repeated tag, once", "repeated @api.get and @api.get", ["api.get"]],
+    ["a tag after Vitest's > separator", "describe > test @api.get-all", ["api.get-all"]],
+    ["no tag in an email address", "mail user@example.com", []],
+    ["no tag in an upper-case id", "upper case @API.get", []],
+    ["no tag in an id with a mixed-case end", "mixed case @api.Get", []],
+    ["no tag in an id with an underscore", "underscore @api_get", []],
+    ["no tag in a lone at sign", "a lone @ sign", []],
+  ])("finds %s", (_case, name, tags) => {
     expect(findTags(name)).toEqual(tags);
   });
 });
