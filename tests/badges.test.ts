@@ -90,6 +90,16 @@ describe("cleanText @outputs.badges", () => {
     expect(cleanText("a\u{0}b\u{7}c\u{1b}d\u{7f}e\u{85}f\u{FFFE}g\u{FFFF}h", 40)).toBe("abcdefgh");
   });
 
+  it("removes invisible formatting characters, so a title cannot be drawn backwards", () => {
+    expect(cleanText("a\u{200B}b\u{200F}c\u{202E}d\u{2066}e\u{2060}f\u{FEFF}g", 40)).toBe(
+      "abcdefg",
+    );
+  });
+
+  it("removes control characters before joining spaces, so one space is left", () => {
+    expect(cleanText("a \u{1} b", 40)).toBe("a b");
+  });
+
   it("removes half of a cut emoji but keeps a whole one", () => {
     expect(cleanText("x\uD83Dy\uDE80z", 40)).toBe("xyz");
     expect(cleanText("go 🚀", 40)).toBe("go 🚀");
@@ -318,6 +328,13 @@ describe("buildBadges @outputs.badges", () => {
     expect(ops?.texts).toEqual(["Ops: 100% (1 of 1 item done)", "Ops", "100%"]);
     expect(badges[2]?.svg).toContain(`fill="${NO_ITEMS_COLOR}"`);
     expect(badges[3]?.svg).toContain('fill="#1a7f37"');
+  });
+
+  it("cuts a long title's subject, never the percentage at its end", () => {
+    const long: Catalog = { ...catalog, project: "x".repeat(300) };
+    const [overall] = buildBadges(long, evaluate(long, []));
+    const title = parseXml(overall?.svg ?? "").texts[0] ?? "";
+    expect(title).toBe(`${"x".repeat(79)}…: 66% (2 of 3 items done)`);
   });
 
   it("uses the catalog's thresholds when it has them", () => {

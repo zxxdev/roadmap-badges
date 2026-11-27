@@ -36,7 +36,8 @@ Option 3, with these choices:
   It covers U+0020 to U+017F (ASCII, Latin-1 and Latin Extended-A). Any other character counts
   as one em, so its box is too wide rather than too narrow. Kerning is left out.
 - **Every piece of text is cleaned and escaped**: whitespace becomes one space, characters that
-  XML forbids (control characters, lone surrogates, U+FFFE, U+FFFF) are removed, labels longer
+  XML forbids (control characters, lone surrogates, U+FFFE, U+FFFF) and invisible formatting
+  characters (zero-width spaces, direction marks and overrides) are removed, labels longer
   than 40 characters end in "…", and `& < > " '` are escaped. Colours are only `#rgb` or
   `#rrggbb`, checked both in the catalog and when drawing, because they go into an attribute.
 - **Accessible**: `role="img"`, an `aria-label` and a `<title>` that say the whole meaning in

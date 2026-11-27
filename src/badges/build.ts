@@ -7,6 +7,13 @@ import type { Catalog } from "../catalog/schema.js";
 import type { Evaluation, Progress } from "../evidence/evaluate.js";
 import { colorFor, DEFAULT_THRESHOLDS } from "./color.js";
 import { renderBadge } from "./svg.js";
+import { cleanText } from "./text.js";
+
+/**
+ * Longest subject in a badge's title, in characters. The subject is cut, not
+ * the whole title, so the percentage at its end is never lost.
+ */
+const MAX_SUBJECT = 80;
 
 export interface BadgeFile {
   /** File name inside the output folder: "badge.svg" or "badge-<area id>.svg". */
@@ -29,7 +36,7 @@ export function buildBadges(catalog: Catalog, result: Evaluation): BadgeFile[] {
       label,
       message: progress.percent === null ? "no items" : `${String(progress.percent)}%`,
       color: colorFor(progress.percent, thresholds),
-      title: `${subject}: ${describe(progress)}`,
+      title: `${cleanText(subject, MAX_SUBJECT)}: ${describe(progress)}`,
     });
 
   return [

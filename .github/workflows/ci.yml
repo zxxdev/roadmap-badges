@@ -152,7 +152,8 @@ jobs:
           test "$MISSING" = "failure" || { echo "::error::a missing catalog should fail, got '$MISSING'"; exit 1; }
           test "$NO_REPORTS" = "failure" || { echo "::error::a pattern with no reports should fail, got '$NO_REPORTS'"; exit 1; }
           test "$STRICT" = "failure" || { echo "::error::a misspelt tag in strict mode should fail, got '$STRICT'"; exit 1; }
-          # The example catalog has three areas: one badge for each and one overall.
+          # The example catalog (tests/fixtures/junit/catalog.yml) has three areas: one
+          # badge for each and one overall, and its overall result is the 40% checked above.
           BADGES="$(cd roadmap-badges && LC_ALL=C ls)"
           test "$BADGES" = "$(printf '%s\n' badge-pester.svg badge-pytest.svg badge-vitest.svg badge.svg)" || { echo "::error::expected four badges, got: $BADGES"; exit 1; }
           grep -q 'aria-label="junit-examples progress: 40% (6 of 15 items done)"' roadmap-badges/badge.svg || { echo "::error::the overall badge does not say 40%"; exit 1; }

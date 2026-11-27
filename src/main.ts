@@ -48,7 +48,7 @@ export async function run(runner: Runner): Promise<void> {
   try {
     const path = runner.getInput("catalog").trim() || DEFAULT_CATALOG;
     const strict = booleanInput(runner, "strict");
-    const output = runner.getInput("output").trim() || DEFAULT_OUTPUT;
+    const output = outputFolder(runner.getInput("output"));
     const patterns = runner
       .getInput("reports")
       .split("\n")
@@ -222,6 +222,22 @@ function needsReports(catalog: Catalog): boolean {
   return catalog.areas.some((area) =>
     area.items.some((item) => item.evidence === "junit" && item.dropped === undefined),
   );
+}
+
+/**
+ * The "output" input: a folder inside the repository. An absolute path or a
+ * ".." segment would write somewhere else, so they are refused.
+ */
+function outputFolder(input: string): string {
+  const folder = input.trim() || DEFAULT_OUTPUT;
+  const absolute = /^[\\/]/.test(folder) || /^[A-Za-z]:/.test(folder);
+  if (absolute || folder.split(/[\\/]/).includes("..")) {
+    throw new Error(
+      `roadmap-badges: the "output" input must be a folder inside the repository, ` +
+        `such as roadmap-badges, not "${folder}".`,
+    );
+  }
+  return folder;
 }
 
 /** A true/false input, read like the toolkit's getBooleanInput. Empty means false. */

@@ -35560,14 +35560,17 @@ function textWidth(text, size = FONT_SIZE) {
 }
 /**
  * Characters that XML 1.0 forbids or that draw nothing: C0 and C1 control
- * characters, lone surrogates (half of an emoji cut in two) and the two
- * non-characters U+FFFE and U+FFFF. Tabs and line breaks become spaces first.
+ * characters (but not tab, line breaks and the like, U+0009 to U+000D, which
+ * become spaces), lone surrogates (half of an emoji cut in two), the two
+ * non-characters U+FFFE and U+FFFF, and invisible formatting characters:
+ * zero-width spaces and joiners, direction marks and overrides (U+202E would
+ * draw the text backwards, so a title could pass for another), and U+FEFF.
  * With the "u" flag the text is read by code points, so a surrogate range only
  * matches a lone half: a whole emoji is one code point outside it.
  */
 const UNSAFE = 
 // eslint-disable-next-line no-control-regex -- matching control characters is the point
-/[\u{0}-\u{1F}\u{7F}-\u{9F}\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
+/[\u{0}-\u{8}\u{E}-\u{1F}\u{7F}-\u{9F}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{2069}\u{FEFF}\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
 /**
  * Text ready for a badge: on one line, without characters that would make the
  * SVG invalid, and at most `max` characters, ending in "…" when it was cut,
@@ -35575,7 +35578,8 @@ const UNSAFE =
  * Characters are counted as code points, so an emoji is never cut in half.
  */
 function cleanText(text, max) {
-    const line = text.replace(/\s+/g, " ").replace(UNSAFE, "").trim();
+    // Removed first, so "a \u{1} b" ends with one space between the words, not two.
+    const line = text.replace(UNSAFE, "").replace(/\s+/g, " ").trim();
     const chars = Array.from(line);
     if (chars.length <= max)
         return line;
@@ -35664,6 +35668,11 @@ function num(value) {
     return String(Math.round(value * 10) / 10);
 }
 
+/**
+ * Longest subject in a badge's title, in characters. The subject is cut, not
+ * the whole title, so the percentage at its end is never lost.
+ */
+const MAX_SUBJECT = 80;
 /** The overall badge's label. */
 const OVERALL_LABEL = "progress";
 /**
@@ -35677,7 +35686,7 @@ function buildBadges(catalog, result) {
         label,
         message: progress.percent === null ? "no items" : `${String(progress.percent)}%`,
         color: colorFor(progress.percent, thresholds),
-        title: `${subject}: ${describe(progress)}`,
+        title: `${cleanText(subject, MAX_SUBJECT)}: ${describe(progress)}`,
     });
     return [
         { name: "badge.svg", svg: draw(OVERALL_LABEL, `${catalog.project} progress`, result) },
@@ -44966,7 +44975,7 @@ async function run(runner) {
     try {
         const path = runner.getInput("catalog").trim() || DEFAULT_CATALOG;
         const strict = booleanInput(runner, "strict");
-        const output = runner.getInput("output").trim() || DEFAULT_OUTPUT;
+        const output = outputFolder(runner.getInput("output"));
         const patterns = runner
             .getInput("reports")
             .split("\n")
@@ -45114,6 +45123,19 @@ function countItems(catalog) {
 /** True when some item that counts is proved by tests, so reports are needed. */
 function needsReports(catalog) {
     return catalog.areas.some((area) => area.items.some((item) => item.evidence === "junit" && item.dropped === undefined));
+}
+/**
+ * The "output" input: a folder inside the repository. An absolute path or a
+ * ".." segment would write somewhere else, so they are refused.
+ */
+function outputFolder(input) {
+    const folder = input.trim() || DEFAULT_OUTPUT;
+    const absolute = /^[\\/]/.test(folder) || /^[A-Za-z]:/.test(folder);
+    if (absolute || folder.split(/[\\/]/).includes("..")) {
+        throw new Error(`roadmap-badges: the "output" input must be a folder inside the repository, ` +
+            `such as roadmap-badges, not "${folder}".`);
+    }
+    return folder;
 }
 /** A true/false input, read like the toolkit's getBooleanInput. Empty means false. */
 function booleanInput(runner, name) {

@@ -96,12 +96,12 @@ JUnit reports they write:
     path: ${{ steps.progress.outputs.output }}
 ```
 
-| Input     | Default          | Description                                                                                                                           |
-| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `catalog` | `progress.yml`   | Path to the catalog, relative to the repository root. The step fails if it is missing or wrong.                                       |
-| `reports` | (none)           | JUnit XML reports: glob patterns, one per line. Each must match at least one file. Needed when the catalog has items proved by tests. |
-| `strict`  | `false`          | When `true`, a tag in a test name that matches no item fails the step instead of warning.                                             |
-| `output`  | `roadmap-badges` | Folder for the SVG badges, created if needed. Other files in it are left alone.                                                       |
+| Input     | Default          | Description                                                                                                                                 |
+| --------- | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `catalog` | `progress.yml`   | Path to the catalog, relative to the repository root. The step fails if it is missing or wrong.                                             |
+| `reports` | (none)           | JUnit XML reports: glob patterns, one per line. Each must match at least one file. Needed when the catalog has items proved by tests.       |
+| `strict`  | `false`          | When `true`, a tag in a test name that matches no item fails the step instead of warning.                                                   |
+| `output`  | `roadmap-badges` | Folder for the SVG badges, inside the repository, created if needed. Other files in it are left alone; absolute paths and `..` are refused. |
 
 | Output    | Description                                                                            |
 | --------- | -------------------------------------------------------------------------------------- |
@@ -384,7 +384,8 @@ expansion is capped so a small file cannot blow up in memory. Test reports are u
 entities declared in a DOCTYPE are never expanded ("billion laughs") and external entities are
 never loaded (XXE); both are refused with an error, and tests check it. Text from the catalog and
 from test names is escaped before it goes into the job summary. In the badges, catalog text is
-put on one line, stripped of characters that XML forbids, cut to 40 characters and escaped, and
+put on one line, stripped of characters that XML forbids and of invisible formatting characters
+(such as the one that draws text backwards), cut to 40 characters and escaped, and
 colours must be `#rgb` or `#rrggbb`, so a catalog cannot add markup or scripts to an SVG; tests
 parse the output of hostile titles to check it. To report a vulnerability, see
 [SECURITY.md](SECURITY.md).

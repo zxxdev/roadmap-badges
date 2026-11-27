@@ -30,7 +30,7 @@ inputs:
     description: >-
       Folder for the SVG badges, relative to the repository root: badge.svg for the whole
       catalog and badge-<area id>.svg for each area. Created if needed; files already there
-      with other names are left alone.
+      with other names are left alone. Absolute paths and ".." are refused.
     required: false
     default: roadmap-badges
 

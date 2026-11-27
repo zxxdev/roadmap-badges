@@ -200,6 +200,20 @@ describe("run writes the badges @outputs.badges", () => {
     expect(done.outputs.output).toBe("site/badges/");
   });
 
+  it("refuses an output folder outside the repository, before reading anything", async () => {
+    for (const output of ["../site", "a/../../b", "/tmp/badges", "C:\\badges", "a\\..\\..\\b"]) {
+      const { runner, done } = fakeRunner(
+        { reports: "junit.xml", output },
+        { "progress.yml": CATALOG, "junit.xml": PASSING },
+      );
+      await run(runner);
+      expect(done.failed, output).toBe(
+        `roadmap-badges: the "output" input must be a folder inside the repository, such as roadmap-badges, not "${output}".`,
+      );
+      expect(done.written, output).toEqual({});
+    }
+  });
+
   it("uses the colours from the catalog's thresholds", async () => {
     const catalog = CATALOG.replace(
       "project: demo\n",

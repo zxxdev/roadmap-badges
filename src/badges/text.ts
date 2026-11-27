@@ -24,14 +24,17 @@ export function textWidth(text: string, size = FONT_SIZE): number {
 
 /**
  * Characters that XML 1.0 forbids or that draw nothing: C0 and C1 control
- * characters, lone surrogates (half of an emoji cut in two) and the two
- * non-characters U+FFFE and U+FFFF. Tabs and line breaks become spaces first.
+ * characters (but not tab, line breaks and the like, U+0009 to U+000D, which
+ * become spaces), lone surrogates (half of an emoji cut in two), the two
+ * non-characters U+FFFE and U+FFFF, and invisible formatting characters:
+ * zero-width spaces and joiners, direction marks and overrides (U+202E would
+ * draw the text backwards, so a title could pass for another), and U+FEFF.
  * With the "u" flag the text is read by code points, so a surrogate range only
  * matches a lone half: a whole emoji is one code point outside it.
  */
 const UNSAFE =
   // eslint-disable-next-line no-control-regex -- matching control characters is the point
-  /[\u{0}-\u{1F}\u{7F}-\u{9F}\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
+  /[\u{0}-\u{8}\u{E}-\u{1F}\u{7F}-\u{9F}\u{200B}-\u{200F}\u{202A}-\u{202E}\u{2060}-\u{2069}\u{FEFF}\u{D800}-\u{DFFF}\u{FFFE}\u{FFFF}]/gu;
 
 /**
  * Text ready for a badge: on one line, without characters that would make the
@@ -40,7 +43,8 @@ const UNSAFE =
  * Characters are counted as code points, so an emoji is never cut in half.
  */
 export function cleanText(text: string, max: number): string {
-  const line = text.replace(/\s+/g, " ").replace(UNSAFE, "").trim();
+  // Removed first, so "a \u{1} b" ends with one space between the words, not two.
+  const line = text.replace(UNSAFE, "").replace(/\s+/g, " ").trim();
   const chars = Array.from(line);
   if (chars.length <= max) return line;
   let cut = chars.slice(0, max - 1).join("");
