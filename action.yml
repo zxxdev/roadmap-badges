@@ -26,8 +26,17 @@ inputs:
       instead of warning. Such a tag is usually a misspelt id.
     required: false
     default: "false"
+  output:
+    description: >-
+      Folder for the SVG badges, relative to the repository root: badge.svg for the whole
+      catalog and badge-<area id>.svg for each area. Created if needed; files already there
+      with other names are left alone.
+    required: false
+    default: roadmap-badges
 
 outputs:
+  output:
+    description: The folder the badges were written to.
   areas:
     description: Number of areas in the catalog.
   items:

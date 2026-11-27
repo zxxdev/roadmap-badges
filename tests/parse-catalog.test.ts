@@ -255,6 +255,112 @@ describe("parseCatalog @catalog.read", () => {
   });
 });
 
+describe("parseCatalog: badge thresholds @outputs.badges", () => {
+  /** VALID with a badges block after the project line. */
+  const withThresholds = (...lines: string[]) =>
+    VALID.replace("project: demo\n", yaml("project: demo", "badges:", "  thresholds:", ...lines));
+
+  it("reads thresholds in short (#rgb) and long (#rrggbb) form", () => {
+    const result = parseCatalog(
+      withThresholds('    - { from: 0, color: "#a00" }', '    - { from: 75, color: "#1A7F37" }'),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.catalog.badges?.thresholds).toEqual([
+      { from: 0, color: "#a00" },
+      { from: 75, color: "#1A7F37" },
+    ]);
+  });
+
+  it("needs the first threshold at 0 and each one above the last", () => {
+    const errors = errorsOf(
+      withThresholds(
+        '    - { from: 10, color: "#a00" }',
+        '    - { from: 60, color: "#b00" }',
+        '    - { from: 60, color: "#c00" }',
+        '    - { from: 40, color: "#d00" }',
+      ),
+    );
+    expect(errors).toEqual([
+      {
+        line: 4,
+        column: 15,
+        field: "badges.thresholds[0].from",
+        message: "must be 0: the first threshold colours every percentage from 0",
+      },
+      {
+        line: 6,
+        column: 15,
+        field: "badges.thresholds[2].from",
+        message: "must be greater than the previous threshold (60)",
+      },
+      {
+        line: 7,
+        column: 15,
+        field: "badges.thresholds[3].from",
+        message: "must be greater than the previous threshold (60)",
+      },
+    ]);
+  });
+
+  it("needs whole percentages from 0 to 100", () => {
+    const errors = errorsOf(
+      withThresholds(
+        '    - { from: 0, color: "#a00" }',
+        '    - { from: 50.5, color: "#b00" }',
+        '    - { from: 101, color: "#c00" }',
+      ),
+    );
+    expect(errors.map((error) => [error.field, error.message])).toEqual([
+      ["badges.thresholds[1].from", "must be a whole number, not 50.5"],
+      ["badges.thresholds[2].from", "must be between 0 and 100"],
+    ]);
+  });
+
+  it("accepts only #rgb and #rrggbb, because the colour goes into the SVG", () => {
+    for (const bad of ["red", "#abcd", "#ggg", '#fff\\" onload=\\"x', "rgb(0,0,0)"]) {
+      const errors = errorsOf(withThresholds(`    - { from: 0, color: "${bad}" }`));
+      expect(
+        errors.map((error) => [error.field, error.message]),
+        bad,
+      ).toEqual([
+        [
+          "badges.thresholds[0].color",
+          'must be a colour as "#rgb" or "#rrggbb", such as "#1a7f37"',
+        ],
+      ]);
+    }
+  });
+
+  it("explains that a colour needs quotes, since # starts a YAML comment", () => {
+    const errors = errorsOf(withThresholds("    - from: 0", "      color: #1a7f37"));
+    // The position is the "#" itself, where YAML saw a comment instead of a value.
+    expect(errors).toEqual([
+      {
+        line: 5,
+        column: 14,
+        field: "badges.thresholds[0].color",
+        message: 'must be a colour in quotes, such as "#1a7f37": in YAML, # starts a comment',
+      },
+    ]);
+  });
+
+  it("rejects an empty list and unknown fields", () => {
+    const empty = errorsOf(
+      VALID.replace("project: demo\n", "project: demo\nbadges:\n  thresholds: []\n"),
+    );
+    expect(empty.map((error) => [error.field, error.message])).toEqual([
+      ["badges.thresholds", "needs at least one threshold"],
+    ]);
+    const unknown = errorsOf(
+      VALID.replace("project: demo\n", "project: demo\nbadges:\n  style: flat\n"),
+    );
+    expect(unknown.map((error) => [error.field, error.message])).toEqual([
+      ["badges.style", "unknown field"],
+    ]);
+  });
+});
+
 describe("formatError @catalog.read", () => {
   it("writes file, line, column, field and message", () => {
     const error = { line: 7, column: 9, field: "areas[0].title", message: "must not be empty" };

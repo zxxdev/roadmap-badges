@@ -8,6 +8,40 @@
       "minLength": 1,
       "description": "The project's name, shown in the report."
     },
+    "badges": {
+      "type": "object",
+      "properties": {
+        "thresholds": {
+          "description": "Badge colours by percentage, lowest first; the first starts at 0. Without it, red below 50, orange below 80, yellow below 100 and green at 100.",
+          "minItems": 1,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 100,
+                "description": "The lowest percentage, from 0 to 100, that gets this colour."
+              },
+              "color": {
+                "type": "string",
+                "pattern": "^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$",
+                "description": "Background colour as \"#rgb\" or \"#rrggbb\", in quotes (# starts a YAML comment)."
+              }
+            },
+            "required": [
+              "from",
+              "color"
+            ],
+            "additionalProperties": false,
+            "description": "A colour for the percentages from this one up to the next threshold."
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "How the badges look."
+    },
     "areas": {
       "minItems": 1,
       "type": "array",
