@@ -17,6 +17,7 @@ function fakeRunner(
     errors: [] as { message: string; location: FileLocation | undefined }[],
     outputs: {} as Record<string, string>,
     summary: "",
+    written: {} as Record<string, string>,
     failed: undefined as string | undefined,
   };
   const runner: Runner = {
@@ -33,6 +34,9 @@ function fakeRunner(
     },
     readFile: (path) => files[path],
     findFiles: (pattern) => globs[pattern] ?? (pattern in files ? [pattern] : []),
+    writeFile: (path, text) => {
+      done.written[path] = text;
+    },
     setFailed: (message) => {
       done.failed = message;
     },
@@ -91,6 +95,7 @@ describe("run @catalog.read", () => {
       "roadmap-badges: read docs/progress.yml for demo: 2 areas, 2 items and 1 dropped.",
       "roadmap-badges: read 1 test from 1 report.",
       "roadmap-badges: 2 of 2 items done (100%).",
+      "roadmap-badges: wrote 3 badges to roadmap-badges/.",
     ]);
     expect(done.outputs).toEqual({
       areas: "2",
@@ -98,6 +103,7 @@ describe("run @catalog.read", () => {
       dropped: "1",
       done: "2",
       percent: "100",
+      output: "roadmap-badges",
     });
     expect(done.summary).toContain(
       "**demo**: 2 of 2 items done (100%). Catalog `docs/progress.yml`, 1 JUnit report with 1 test.",
@@ -166,6 +172,70 @@ describe("run @catalog.read", () => {
   });
 });
 
+describe("run writes the badges @outputs.badges", () => {
+  it("writes one badge for the catalog and one per area, and says where", async () => {
+    const { runner, done } = fakeRunner(
+      { reports: "junit.xml" },
+      { "progress.yml": CATALOG, "junit.xml": PASSING },
+    );
+    await run(runner);
+    expect(Object.keys(done.written)).toEqual([
+      "roadmap-badges/badge.svg",
+      "roadmap-badges/badge-api.svg",
+      "roadmap-badges/badge-docs.svg",
+    ]);
+    expect(done.written["roadmap-badges/badge-api.svg"]).toContain(
+      'aria-label="API | v2: 100% (1 of 1 item done)"',
+    );
+    expect(done.summary).toContain("3 badges written to `roadmap-badges/`.");
+  });
+
+  it("writes them to the folder in the output input", async () => {
+    const { runner, done } = fakeRunner(
+      { reports: "junit.xml", output: " site/badges/ " },
+      { "progress.yml": CATALOG, "junit.xml": PASSING },
+    );
+    await run(runner);
+    expect(Object.keys(done.written)).toContain("site/badges/badge.svg");
+    expect(done.outputs.output).toBe("site/badges/");
+  });
+
+  it("refuses an output folder outside the repository, before reading anything", async () => {
+    for (const output of ["../site", "a/../../b", "/tmp/badges", "C:\\badges", "a\\..\\..\\b"]) {
+      const { runner, done } = fakeRunner(
+        { reports: "junit.xml", output },
+        { "progress.yml": CATALOG, "junit.xml": PASSING },
+      );
+      await run(runner);
+      expect(done.failed, output).toBe(
+        `roadmap-badges: the "output" input must be a folder inside the repository, such as roadmap-badges, not "${output}".`,
+      );
+      expect(done.written, output).toEqual({});
+    }
+  });
+
+  it("uses the colours from the catalog's thresholds", async () => {
+    const catalog = CATALOG.replace(
+      "project: demo\n",
+      'project: demo\nbadges:\n  thresholds:\n    - { from: 0, color: "#0a0a0a" }\n',
+    );
+    const { runner, done } = fakeRunner(
+      { reports: "junit.xml" },
+      { "progress.yml": catalog, "junit.xml": PASSING },
+    );
+    await run(runner);
+    expect(done.failed).toBeUndefined();
+    expect(done.written["roadmap-badges/badge.svg"]).toContain('fill="#0a0a0a"');
+  });
+
+  it("writes nothing when the catalog is invalid", async () => {
+    const { runner, done } = fakeRunner({}, { "progress.yml": "project: demo\n" });
+    await run(runner);
+    expect(done.failed).toBeDefined();
+    expect(done.written).toEqual({});
+  });
+});
+
 describe("run with test reports @evidence.junit", () => {
   it("lists every item that is not done, with the reason", async () => {
     const catalog = `project: demo
@@ -225,7 +295,7 @@ areas:
     await run(runner);
 
     expect(done.failed).toBeUndefined();
-    expect(done.logs.at(-1)).toBe("roadmap-badges: 1 of 2 items done (50%).");
+    expect(done.logs).toContain("roadmap-badges: 1 of 2 items done (50%).");
     expect(done.summary).toContain("Catalog `progress.yml`, no test reports.");
   });
 

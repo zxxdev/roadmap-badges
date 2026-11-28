@@ -76,6 +76,16 @@ jobs:
           reports: reports/junit.xml
           strict: true
 
+      # The badges the step above drew for this repository, to download from the
+      # run's page. They will be published on GitHub Pages in a later version.
+      - name: Upload this repository's badges
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: badges
+          path: roadmap-badges/
+          if-no-files-found: error
+          retention-days: 14
+
   action:
     name: Run the action
     runs-on: ubuntu-latest
@@ -142,4 +152,9 @@ jobs:
           test "$MISSING" = "failure" || { echo "::error::a missing catalog should fail, got '$MISSING'"; exit 1; }
           test "$NO_REPORTS" = "failure" || { echo "::error::a pattern with no reports should fail, got '$NO_REPORTS'"; exit 1; }
           test "$STRICT" = "failure" || { echo "::error::a misspelt tag in strict mode should fail, got '$STRICT'"; exit 1; }
+          # The example catalog (tests/fixtures/junit/catalog.yml) has three areas: one
+          # badge for each and one overall, and its overall result is the 40% checked above.
+          BADGES="$(cd roadmap-badges && LC_ALL=C ls)"
+          test "$BADGES" = "$(printf '%s\n' badge-pester.svg badge-pytest.svg badge-vitest.svg badge.svg)" || { echo "::error::expected four badges, got: $BADGES"; exit 1; }
+          grep -q 'aria-label="junit-examples progress: 40% (6 of 15 items done)"' roadmap-badges/badge.svg || { echo "::error::the overall badge does not say 40%"; exit 1; }
           echo "All results are right."

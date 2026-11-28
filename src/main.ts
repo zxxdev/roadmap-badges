@@ -2,10 +2,11 @@
  * The action's logic, kept apart from the GitHub Actions toolkit so it can be
  * tested with a fake runner: index.ts passes the real one.
  *
- * It reads the catalog and the JUnit reports, decides which items are done and
- * reports the progress of each area. Drawing the badges comes next.
+ * It reads the catalog and the JUnit reports, decides which items are done,
+ * draws the badges and reports the progress of each area.
  */
-import { normalize } from "node:path";
+import { normalize, posix } from "node:path";
+import { buildBadges } from "./badges/build.js";
 import { formatError, parseCatalog } from "./catalog/parse.js";
 import type { Catalog } from "./catalog/schema.js";
 import { evaluate, type Evaluation, type ItemResult, type Test } from "./evidence/evaluate.js";
@@ -33,10 +34,13 @@ export interface Runner {
   readFile(path: string): string | undefined;
   /** The files that match a glob pattern, sorted. */
   findFiles(pattern: string): string[];
+  /** Writes a text file, creating its folder if needed. */
+  writeFile(path: string, text: string): void;
   setFailed(message: string): void;
 }
 
 export const DEFAULT_CATALOG = "progress.yml";
+export const DEFAULT_OUTPUT = "roadmap-badges";
 
 const HEADING = "### Roadmap Badges\n\n";
 
@@ -44,6 +48,7 @@ export async function run(runner: Runner): Promise<void> {
   try {
     const path = runner.getInput("catalog").trim() || DEFAULT_CATALOG;
     const strict = booleanInput(runner, "strict");
+    const output = outputFolder(runner.getInput("output"));
     const patterns = runner
       .getInput("reports")
       .split("\n")
@@ -81,7 +86,17 @@ export async function run(runner: Runner): Promise<void> {
     runner.info(`roadmap-badges: ${progressText(result)}.`);
     runner.setOutput("done", String(result.done));
     runner.setOutput("percent", result.percent === null ? "" : String(result.percent));
-    await runner.addSummary(summary(path, catalog, result, reports.files));
+
+    const badges = buildBadges(catalog, result);
+    for (const badge of badges) runner.writeFile(posix.join(output, badge.name), badge.svg);
+    const folder = `${output.replace(/[\\/]+$/, "")}/`;
+    runner.info(`roadmap-badges: wrote ${plural(badges.length, "badge")} to ${folder}.`);
+    runner.setOutput("output", output);
+
+    await runner.addSummary(
+      summary(path, catalog, result, reports.files) +
+        `\n${plural(badges.length, "badge")} written to ${codeSpan(folder)}.\n`,
+    );
 
     if (strict && result.orphans.length > 0) {
       runner.setFailed(
@@ -207,6 +222,22 @@ function needsReports(catalog: Catalog): boolean {
   return catalog.areas.some((area) =>
     area.items.some((item) => item.evidence === "junit" && item.dropped === undefined),
   );
+}
+
+/**
+ * The "output" input: a folder inside the repository. An absolute path or a
+ * ".." segment would write somewhere else, so they are refused.
+ */
+function outputFolder(input: string): string {
+  const folder = input.trim() || DEFAULT_OUTPUT;
+  const absolute = /^[\\/]/.test(folder) || /^[A-Za-z]:/.test(folder);
+  if (absolute || folder.split(/[\\/]/).includes("..")) {
+    throw new Error(
+      `roadmap-badges: the "output" input must be a folder inside the repository, ` +
+        `such as roadmap-badges, not "${folder}".`,
+    );
+  }
+  return folder;
 }
 
 /** A true/false input, read like the toolkit's getBooleanInput. Empty means false. */

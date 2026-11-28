@@ -2,8 +2,8 @@
  * Entry point that GitHub runs (bundled into dist/index.js): connects run() to
  * the real runner through the GitHub Actions toolkit.
  */
-import { globSync, readFileSync, statSync } from "node:fs";
-import { basename } from "node:path";
+import { globSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname } from "node:path";
 import * as core from "@actions/core";
 import { run, type FileLocation } from "./main.js";
 
@@ -53,6 +53,10 @@ await run({
     globSync(pattern, { exclude: (path) => SKIPPED_FOLDERS.has(basename(path)) })
       .filter((path) => statSync(path).isFile())
       .sort(),
+  writeFile: (path, text) => {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, text, "utf8");
+  },
   setFailed: (message) => {
     core.setFailed(message);
   },

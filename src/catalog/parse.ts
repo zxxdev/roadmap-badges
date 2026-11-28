@@ -134,6 +134,10 @@ function describeIssue(
       value === undefined
         ? "missing required field"
         : `must be ${typeName(issue.expected)}, not ${describeValue(value)}`;
+    // `color: #1a7f37` without quotes is a key with a comment after it, so YAML reads null.
+    if (value === null && path.at(-1) === "color") {
+      message = 'must be a colour in quotes, such as "#1a7f37": in YAML, # starts a comment';
+    }
   }
   const root = path.length === 0;
   return [
@@ -227,6 +231,8 @@ function fieldName(path: Path): string {
 function typeName(expected: string): string {
   const names: Record<string, string> = {
     string: "text",
+    number: "a whole number",
+    int: "a whole number",
     boolean: "true or false",
     array: "a list",
     object: "a mapping",
